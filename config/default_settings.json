@@ -1,0 +1,140 @@
+{
+  "app_name": "IFMIS–VLC Voucher Reconciliation Tool",
+  "version": "1.0.0",
+  "theme": "light",
+  "window": {
+    "maximized": true,
+    "width": 1440,
+    "height": 900,
+    "min_width": 1080,
+    "min_height": 720
+  },
+  "reconciliation_settings": {
+    "matching_key": ["try_cd", "mhcd", "vou_no"],
+    "available_key_fields": [
+      {"id": "try_cd", "label": "Treasury Code", "default": true},
+      {"id": "mhcd", "label": "Major Head (MHCD)", "default": true},
+      {"id": "vou_no", "label": "Voucher Number", "default": true},
+      {"id": "vou_date", "label": "Voucher Date", "default": false},
+      {"id": "ddo_cd", "label": "DDO Code", "default": false}
+    ],
+    "amount_tolerance": 0.00,
+    "allow_rounding_tolerance": false,
+    "duplicate_handling": "flag_all_and_retain",
+    "include_invalid_records": false,
+    "account_for_file3_recoveries": true
+  },
+  "treasury_map": {
+    "052": "VAL",
+    "VAL": "052"
+  },
+  "default_column_mappings": {
+    "file_1": {
+      "file_type": "ifmis_file_1",
+      "label": "IFMIS Bill Master (Gross, Net & Deductions)",
+      "has_header": false,
+      "delimiter": ",",
+      "columns": {
+        "3": "try_cd",
+        "8": "mhcd",
+        "9": "vou_no",
+        "10": "vou_date",
+        "6": "ddo_cd",
+        "4": "token_no",
+        "11": "gross_amt",
+        "12": "ag_ded_amt",
+        "13": "try_ded_amt",
+        "14": "net_amt"
+      }
+    },
+    "file_2": {
+      "file_type": "ifmis_file_2",
+      "label": "IFMIS Gross Expenditure (Detailed Classification)",
+      "has_header": false,
+      "delimiter": ",",
+      "columns": {
+        "2": "try_cd",
+        "6": "mhcd",
+        "4": "vou_no",
+        "5": "vou_date",
+        "7": "smcd",
+        "8": "micd",
+        "10": "shcd",
+        "11": "dhcd",
+        "12": "sdcd",
+        "13": "vc",
+        "14": "pn",
+        "15": "gross_amt"
+      }
+    },
+    "file_3": {
+      "file_type": "ifmis_file_3",
+      "label": "AG Deductions Schedule (GPF 8009, 0070, 7610)",
+      "has_header": false,
+      "delimiter": ",",
+      "columns": {
+        "2": "try_cd",
+        "4": "mhcd",
+        "6": "vou_no",
+        "5": "vou_date",
+        "7": "ded_mhcd",
+        "14": "ded_amt"
+      }
+    },
+    "file_4": {
+      "file_type": "ifmis_file_4",
+      "label": "Treasury Deductions Schedule (TDS 8658, PT 0028, GIS 0216)",
+      "has_header": false,
+      "delimiter": ",",
+      "columns": {
+        "2": "try_cd",
+        "4": "mhcd",
+        "6": "vou_no",
+        "5": "vou_date",
+        "7": "ded_mhcd",
+        "14": "ded_amt"
+      }
+    },
+    "file_5": {
+      "file_type": "ifmis_file_5",
+      "label": "Treasury Net SOP (Schedule of Payments)",
+      "has_header": false,
+      "delimiter": ",",
+      "columns": {
+        "0": "try_cd",
+        "1": "mhcd",
+        "7": "vou_no",
+        "6": "vou_date",
+        "4": "ddo_cd",
+        "5": "token_no",
+        "9": "net_amt"
+      }
+    },
+    "file_6": {
+      "file_type": "vlc_compay_file_6",
+      "label": "VLC COMPAY Posted Vouchers",
+      "has_header": true,
+      "delimiter": "\t",
+      "columns": {
+        "TRY_CD": "try_cd",
+        "MHCD": "mhcd",
+        "SMCD": "smcd",
+        "MICD": "micd",
+        "SHCD": "shcd",
+        "DHCD": "dhcd",
+        "SDCD": "sdcd",
+        "VC": "vc",
+        "PN": "pn",
+        "VOU_NO": "vou_no",
+        "BILL_DATE": "vou_date",
+        "DDO_CD": "ddo_cd",
+        "BILL_NO": "bill_no",
+        "AMOUNT": "gross_amt",
+        "REFUND": "refund",
+        "SS_SOP": "ss_sop",
+        "TE_NO": "te_no",
+        "SCTND_CODE": "sctnd_code"
+      }
+    }
+  }
+}
