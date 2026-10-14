@@ -13,6 +13,9 @@ __pycache__/
 logs/
 reports/
 scratch/
+build/
+dist/
+*.exe
 
 # Local backup archives and snapshots (preserves do_backup.py)
 back-up/backup_*/

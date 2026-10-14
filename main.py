@@ -18,13 +18,18 @@ from core.reconciliation_engine import ComprehensiveReconciliationEngine
 from core.export_manager import ExportManager
 from core.audit_log import AuditLogger
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(APP_DIR)
+if getattr(sys, 'frozen', False):
+    APP_DIR = sys._MEIPASS
+    EXE_DIR = os.path.dirname(sys.executable)
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    EXE_DIR = APP_DIR
+os.chdir(EXE_DIR)
 
 class DesktopReconciliationApi:
     def __init__(self):
         self._importer = FileImportManager()
-        self._logger = AuditLogger()
+        self._logger = AuditLogger(log_dir=os.path.join(EXE_DIR, "logs"))
         self._engine = None
         self._last_results = None
         # Eagerly preload default workspace files so data is immediately available
@@ -68,8 +73,13 @@ class DesktopReconciliationApi:
 
     def _auto_detect_default_files(self):
         """Automatically links default workspace files if present."""
-        vb_folder = os.path.join(APP_DIR, "vallabh bhawan")
-        compay_file = os.path.join(APP_DIR, "COMPAY_DATA_VAL_10_2025.XLS")
+        vb_folder = os.path.join(EXE_DIR, "vallabh bhawan")
+        if not os.path.isdir(vb_folder):
+            vb_folder = os.path.join(APP_DIR, "vallabh bhawan")
+
+        compay_file = os.path.join(EXE_DIR, "COMPAY_DATA_VAL_10_2025.XLS")
+        if not os.path.exists(compay_file):
+            compay_file = os.path.join(APP_DIR, "COMPAY_DATA_VAL_10_2025.XLS")
 
         f_map = {
             "file_1": os.path.join(vb_folder, "1_0521020253sop.txt"),
@@ -253,7 +263,7 @@ class DesktopReconciliationApi:
         if not self._last_results:
             return {"error": "No reconciliation results available to export."}
 
-        exporter = ExportManager(self._last_results, self._logger)
+        exporter = ExportManager(self._last_results, self._logger, reports_dir=os.path.join(EXE_DIR, "reports"))
         try:
             if format_type == 'excel':
                 p = exporter.export_excel(section=section)
@@ -328,7 +338,7 @@ class DesktopReconciliationApi:
         if not selected_path:
             return {"cancelled": True}
 
-        exporter = ExportManager(self._last_results, self._logger)
+        exporter = ExportManager(self._last_results, self._logger, reports_dir=os.path.join(EXE_DIR, "reports"))
         try:
             if format_type == 'excel':
                 p = exporter.export_excel(output_path=selected_path, section=section)
@@ -365,9 +375,9 @@ class DesktopReconciliationApi:
         return False
 
     def open_output_folder(self):
-        target_dir = os.path.join(APP_DIR, "reports", "Treasury_052_VAL_10_2025")
+        target_dir = os.path.join(EXE_DIR, "reports", "Treasury_052_VAL_10_2025")
         if not os.path.exists(target_dir):
-            target_dir = os.path.join(APP_DIR, "reports")
+            target_dir = os.path.join(EXE_DIR, "reports")
         os.makedirs(target_dir, exist_ok=True)
         try:
             os.startfile(target_dir)
