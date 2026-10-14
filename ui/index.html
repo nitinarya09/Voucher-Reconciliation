@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IFMIS–VLC Voucher Reconciliation Tool</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -1155,6 +1156,10 @@
       </div>
     </div>
   </div>
+
+  <!-- Hidden Client-Side File Inputs for Pure Web Mode -->
+  <input type="file" id="client-folder-input" webkitdirectory directory multiple style="display: none;">
+  <input type="file" id="client-single-file-input" style="display: none;">
 
   <div id="toast">Message</div>
 
