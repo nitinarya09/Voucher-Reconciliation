@@ -10,6 +10,7 @@ added_files = [
     ('vallabh bhawan', 'vallabh bhawan'),
     ('TEST DATA', 'TEST DATA'),
     ('COMPAY_DATA_VAL_10_2025.XLS', '.'),
+    ('analysis.ico', '.'),
 ]
 
 hidden_imports = [
@@ -56,7 +57,7 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-icon_path = 'app_icon.ico' if os.path.exists('app_icon.ico') else None
+icon_path = 'analysis.ico' if os.path.exists('analysis.ico') else ('app_icon.ico' if os.path.exists('app_icon.ico') else None)
 
 exe = EXE(
     pyz,
