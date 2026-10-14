@@ -411,8 +411,18 @@ function browseFolderAndAutoImport() {
     });
   } else {
     // Web Mode folder input
-    const fi = document.getElementById('client-folder-input');
+    let fi = document.getElementById('client-folder-input');
+    if (!fi) {
+      setupClientFileHandlers();
+      fi = document.getElementById('client-folder-input');
+    }
     if (fi) {
+      fi.onchange = function(e) {
+        if (e.target.files && e.target.files.length > 0) {
+          handleClientFileList(e.target.files);
+        }
+        fi.value = '';
+      };
       fi.click();
     } else {
       showToast("Select files using individual browse buttons below.");
@@ -458,12 +468,12 @@ function loadDefaultFiles() {
   } else {
     // Pure Web Mode (GitHub Pages)
     fileStates = {
-      file_1: { path: 'vallabh bhawan/2_0521020253sop.txt (Bill Master)', loaded: true, records: 7428, size: 674874 },
-      file_2: { path: 'vallabh bhawan/1_0521020253sop.txt (Detailed Gross)', loaded: true, records: 10471, size: 660327 },
-      file_3: { path: 'vallabh bhawan/3_0521020253sop.txt (AG Deductions)', loaded: true, records: 1047, size: 43407 },
-      file_4: { path: 'vallabh bhawan/4_0521020253sop.txt (Try Deductions)', loaded: true, records: 6381, size: 354424 },
-      file_5: { path: 'vallabh bhawan/0521020253sop.txt (Treasury SOP Net)', loaded: true, records: 7428, size: 387412 },
-      file_6: { path: 'COMPAY_DATA_VAL_10_2025.XLS (VLC COMPAY)', loaded: true, records: 10764, size: 1328618 }
+      file_1: { path: 'vallabh bhawan/1_0521020253sop.txt (Bill Master)', loaded: true, records: 7268, size: 667595 },
+      file_2: { path: 'vallabh bhawan/2_0521020253sop.txt (Detailed Gross)', loaded: true, records: 10471, size: 685345 },
+      file_3: { path: 'vallabh bhawan/3_0521020253sop.txt (AG Deductions)', loaded: true, records: 735, size: 44142 },
+      file_4: { path: 'vallabh bhawan/4_0521020253sop.txt (Try Deductions)', loaded: true, records: 6210, size: 360634 },
+      file_5: { path: 'vallabh bhawan/0521020253sop.txt (Treasury SOP Net)', loaded: true, records: 7268, size: 394680 },
+      file_6: { path: 'COMPAY_DATA_VAL_10_2025.XLS (VLC COMPAY)', loaded: true, records: 10805, size: 1328618 }
     };
     renderFileCards();
     if (typeof BASELINE_DATA !== 'undefined' && BASELINE_DATA) {
@@ -514,6 +524,7 @@ function browseSingleFile(fileId) {
         };
         reader.readAsText(file);
       };
+      fi.value = '';
       fi.click();
     }
   }
@@ -672,16 +683,22 @@ function setupClientFileHandlers() {
     fiFolder = document.createElement('input');
     fiFolder.type = 'file';
     fiFolder.id = 'client-folder-input';
-    fiFolder.webkitdirectory = true;
-    fiFolder.directory = true;
-    fiFolder.multiple = true;
     fiFolder.style.display = 'none';
     document.body.appendChild(fiFolder);
-
-    fiFolder.addEventListener('change', function(e) {
-      handleClientFileList(e.target.files);
-    });
   }
+  fiFolder.setAttribute('webkitdirectory', '');
+  fiFolder.setAttribute('directory', '');
+  fiFolder.setAttribute('multiple', '');
+  fiFolder.webkitdirectory = true;
+  fiFolder.directory = true;
+  fiFolder.multiple = true;
+
+  fiFolder.onchange = function(e) {
+    if (e.target.files && e.target.files.length > 0) {
+      handleClientFileList(e.target.files);
+    }
+    fiFolder.value = '';
+  };
 
   let fiSingle = document.getElementById('client-single-file-input');
   if (!fiSingle) {
@@ -691,6 +708,19 @@ function setupClientFileHandlers() {
     fiSingle.style.display = 'none';
     document.body.appendChild(fiSingle);
   }
+
+  // Window-level Drag and Drop for seamless folder/file drops
+  window.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  window.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleClientFileList(e.dataTransfer.files);
+    }
+  });
 }
 
 function handleClientFileList(fileList) {
@@ -703,16 +733,19 @@ function handleClientFileList(fileList) {
 
   function detectRole(file, lines) {
     const lfn = file.name.toLowerCase();
+
+    // 1. Filename heuristic matching
     if (lfn.includes("compay") || lfn.includes("vlc")) return "file_6";
-    if (/^2[_\.]|bill_?master|gross_?net|file_?1\b/i.test(lfn)) return "file_1";
-    if (/^1[_\.]|gross_?exp|detailed|classification|file_?2\b/i.test(lfn)) return "file_2";
+    if (/^1[_\.]|bill_?master|gross_?net|file_?1\b/i.test(lfn)) return "file_1";
+    if (/^2[_\.]|gross_?exp|detailed|classification|file_?2\b/i.test(lfn)) return "file_2";
     if (/^3[_\.]|ag_?ded|gpf|file_?3\b/i.test(lfn)) return "file_3";
     if (/^4[_\.]|try_?ded|non_?ag|treasury_?ded|tds|file_?4\b/i.test(lfn)) return "file_4";
     if (/^5[_\.]|net_?sop|netsop|file_?5\b/i.test(lfn) || (lfn.endsWith("sop.txt") && !/^[1234][_\.]/i.test(lfn))) return "file_5";
 
+    // 2. Header and content structural inspection
     if (!lines || lines.length === 0) return null;
     const header = lines[0].toUpperCase();
-    if (header.includes("SS_SOP") || header.includes("TE_NO")) return "file_6";
+    if (header.includes("SS_SOP") || header.includes("TE_NO") || header.includes("SEC_MHCD")) return "file_6";
     if (header.includes("GROSS_AMT") && header.includes("NET_AMT")) return "file_1";
     if (header.includes("GROSS_AMT") && !header.includes("NET_AMT")) return "file_2";
     if (header.includes("NET_AMT") && !header.includes("GROSS_AMT")) return "file_5";
@@ -731,23 +764,47 @@ function handleClientFileList(fileList) {
       return agScore >= tryScore ? "file_3" : "file_4";
     }
 
+    // 3. Positional column count for raw comma-delimited IFMIS files (no headers)
+    const firstLine = lines[0].trim();
+    const cols = firstLine.split(',');
+    if (cols.length >= 16 && cols[0].length <= 2) {
+      return "file_1";
+    }
+    if (cols.length >= 14 && (cols[13] === 'V' || cols[13] === 'C' || cols[14] === 'P' || cols[14] === 'C')) {
+      return "file_2";
+    }
+    if (cols.length === 10) {
+      return "file_5";
+    }
+    if (cols.length >= 12 && cols.some(c => AG_HEADS.has(c.trim()))) {
+      return "file_3";
+    }
+    if (cols.length >= 12 && cols.some(c => TRY_HEADS.has(c.trim()))) {
+      return "file_4";
+    }
+
     return null;
   }
 
   const identified = {};
+  const firstFile = files[0];
+  const relPath = firstFile && firstFile.webkitRelativePath ? firstFile.webkitRelativePath : '';
+  const folderName = relPath && relPath.includes('/') ? relPath.split('/')[0] : 'Selected Folder';
+
   const readPromises = files.map(file => {
     return new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = function(e) {
-        const snippet = e.target.result;
-        const lines = snippet.split(/\r?\n/).slice(0, 10);
+        const text = e.target.result || '';
+        const lines = text.split(/\r?\n/).slice(0, 10);
         const role = detectRole(file, lines);
         if (role && !identified[role]) {
           identified[role] = file;
-          clientUploadedRawFiles[role] = snippet;
-          const lineCount = (snippet.match(/\n/g) || []).length;
+          clientUploadedRawFiles[role] = text;
+          const lineCount = (text.match(/\n/g) || []).length;
+          const displayPath = file.webkitRelativePath || file.name;
           fileStates[role] = {
-            path: file.name,
+            path: displayPath,
             loaded: true,
             records: lineCount,
             size: file.size
@@ -764,10 +821,15 @@ function handleClientFileList(fileList) {
     renderFileCards();
     const identifiedNames = {};
     for (const [r, f] of Object.entries(identified)) {
-      identifiedNames[r] = f.name;
+      identifiedNames[r] = f.webkitRelativePath || f.name;
     }
-    renderFolderImportStatus({ folder: 'Selected Folder', identified: identifiedNames });
-    showToast(`Loaded ${Object.keys(identified).length}/6 files! Ready to reconcile.`);
+    const count = Object.keys(identified).length;
+    renderFolderImportStatus({
+      folder: folderName,
+      identified: identifiedNames,
+      is_all_ready: count === 6
+    });
+    showToast(`Loaded ${count}/6 files from ${folderName}! Ready to reconcile.`);
   });
 }
 
