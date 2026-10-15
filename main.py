@@ -365,29 +365,52 @@ class DesktopReconciliationApi:
 
     def open_file(self, file_path):
         """Opens specified file in its default OS application (e.g. Microsoft Excel)."""
-        if file_path and os.path.exists(file_path):
+        if not file_path:
+            return False
+        abs_p = os.path.abspath(file_path)
+        if os.path.exists(abs_p):
             try:
-                os.startfile(file_path)
+                os.startfile(abs_p)
                 return True
             except Exception:
                 try:
-                    subprocess.Popen(f'explorer "{file_path}"')
+                    subprocess.Popen(['explorer.exe', abs_p])
                     return True
                 except Exception:
                     return False
         return False
 
+    def show_in_folder(self, file_path):
+        """Opens Windows Explorer with the specific file selected."""
+        if not file_path:
+            return self.open_output_folder()
+        abs_p = os.path.abspath(file_path)
+        if os.path.exists(abs_p):
+            try:
+                subprocess.Popen(f'explorer.exe /select,"{abs_p}"')
+                return True
+            except Exception:
+                folder = os.path.dirname(abs_p)
+                try:
+                    os.startfile(folder)
+                    return True
+                except Exception:
+                    return False
+        return self.open_output_folder()
+
     def open_output_folder(self):
+        """Opens the reports output folder in Windows Explorer."""
         target_dir = os.path.join(EXE_DIR, "reports", "Treasury_052_VAL_10_2025")
         if not os.path.exists(target_dir):
             target_dir = os.path.join(EXE_DIR, "reports")
         os.makedirs(target_dir, exist_ok=True)
+        abs_dir = os.path.abspath(target_dir)
         try:
-            os.startfile(target_dir)
+            os.startfile(abs_dir)
             return True
         except Exception:
             try:
-                subprocess.Popen(f'explorer "{target_dir}"')
+                subprocess.Popen(f'explorer.exe "{abs_dir}"')
                 return True
             except Exception:
                 return False

@@ -145,10 +145,21 @@ aside {
 .nav-section-title {
   font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #64748b;
+  letter-spacing: 1px;
+  color: #94a3b8;
   font-weight: 700;
-  padding: 12px 10px 4px 10px;
+  padding: 14px 10px 4px 10px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-section-title:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 6px;
 }
 
 .nav-item {
@@ -162,6 +173,7 @@ aside {
   font-weight: 500;
   cursor: pointer;
   border: none;
+  border-left: 3px solid transparent;
   background: none;
   width: 100%;
   text-align: left;
@@ -169,14 +181,28 @@ aside {
 }
 
 .nav-item:hover {
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: rgba(255, 255, 255, 0.07);
   color: #ffffff;
+  transform: translateX(2px);
 }
 
 .nav-item.active {
-  background-color: var(--primary);
+  background-color: rgba(37, 99, 235, 0.22);
   color: #ffffff;
+  border-left: 3px solid #3b82f6;
   font-weight: 600;
+}
+
+.nav-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.nav-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-footer {
@@ -185,6 +211,20 @@ aside {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  font-family: monospace;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
 
 /* Main Work Area */

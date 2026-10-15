@@ -21,54 +21,58 @@
     </div>
 
     <div class="nav-menu">
-      <div class="nav-section-title">Overview</div>
+      <!-- Workspace 1: Executive Audit -->
+      <div class="nav-section-title">EXECUTIVE AUDIT</div>
       <button class="nav-item active" onclick="navigate('dashboard')">
-        <span>📊</span> Dashboard
+        <span class="nav-icon">📊</span> <span class="nav-text">Executive Dashboard</span>
       </button>
 
-      <div class="nav-section-title">Data Ingestion</div>
-      <button class="nav-item" onclick="navigate('import')">
-        <span>📂</span> Import Files (6 Files)
-      </button>
-
-      <div class="nav-section-title">Reconciliation & Checks</div>
+      <!-- Workspace 2: Core Reconciliation Workbench -->
+      <div class="nav-section-title">RECONCILIATION WORKBENCH</div>
       <button class="nav-item" onclick="navigate('gross-recon')">
-        <span>⚖️</span> Gross Recon (File 02 vs File 06)
+        <span class="nav-icon">⚖️</span> <span class="nav-text">Gross Parity (File 02 vs 06)</span>
       </button>
       <button class="nav-item" onclick="navigate('classification-tally')">
-        <span>🏷️</span> Classification Tally (File 02 vs File 06)
-      </button>
-      <button class="nav-item" onclick="navigate('refunds')">
-        <span>💸</span> Refunds & Deduct-Exp Register
+        <span class="nav-icon">🏷️</span> <span class="nav-text">15-Digit Classification Tally</span>
       </button>
       <button class="nav-item" onclick="navigate('gross-net-val')">
-        <span>➕</span> Voucher Details: Gross–Net (File 01)
+        <span class="nav-icon">➕</span> <span class="nav-text">Bill Gross–Net (File 01)</span>
       </button>
       <button class="nav-item" onclick="navigate('net-recon')">
-        <span>💳</span> Net Recon (File 01 vs File 05)
+        <span class="nav-icon">💳</span> <span class="nav-text">Net Bank SOP (File 01 vs 05)</span>
       </button>
       <button class="nav-item" onclick="navigate('ag-ded')">
-        <span>📑</span> AG Deduction (File 03 vs 01 & 06)
+        <span class="nav-icon">📑</span> <span class="nav-text">AG Deductions (File 03 GPF/Rec)</span>
       </button>
       <button class="nav-item" onclick="navigate('non-ag-ded')">
-        <span>📑</span> NON AG Deduction (File 04 vs 01)
+        <span class="nav-icon">📑</span> <span class="nav-text">Treasury Deductions (File 04 TDS/PT)</span>
       </button>
-      <button class="nav-item" onclick="navigate('cross-file')">
-        <span>🔍</span> Statutory Consistency (All 6 Files)
-      </button>
-      <button class="nav-item" onclick="navigate('exceptions')">
-        <span>⚠️</span> Exceptions & Discrepancies
+      <button class="nav-item" onclick="navigate('refunds')">
+        <span class="nav-icon">💸</span> <span class="nav-text">Refunds & Deduct-Exp (MH 900)</span>
       </button>
 
-      <div class="nav-section-title">Reporting & System</div>
+      <!-- Workspace 3: Compliance & Exceptions -->
+      <div class="nav-section-title">COMPLIANCE & EXCEPTIONS</div>
+      <button class="nav-item" onclick="navigate('cross-file')">
+        <span class="nav-icon">🔍</span> <span class="nav-text">12 Statutory Consistency Rules</span>
+      </button>
+      <button class="nav-item" onclick="navigate('exceptions')">
+        <span class="nav-icon">⚠️</span> <span class="nav-text">Exceptions & Discrepancies</span>
+      </button>
+
+      <!-- Workspace 4: Data & Reporting -->
+      <div class="nav-section-title">DATA & REPORTING</div>
+      <button class="nav-item" onclick="navigate('import')">
+        <span class="nav-icon">📂</span> <span class="nav-text">Smart File Ingestion (6 Files)</span>
+      </button>
       <button class="nav-item" onclick="navigate('export')">
-        <span>📥</span> Export Reports
+        <span class="nav-icon">📥</span> <span class="nav-text">Multi-Format Export Center</span>
       </button>
       <button class="nav-item" onclick="navigate('history')">
-        <span>📜</span> Processing History & Logs
+        <span class="nav-icon">📜</span> <span class="nav-text">Processing History & Audit Logs</span>
       </button>
       <button class="nav-item" onclick="navigate('settings')">
-        <span>⚙️</span> Settings & Configuration
+        <span class="nav-icon">⚙️</span> <span class="nav-text">Settings & Column Mapping</span>
       </button>
     </div>
 
@@ -87,12 +91,20 @@
     <!-- Top Header -->
     <header>
       <div class="header-left">
-        <h2 class="screen-title" id="screen-title">Dashboard</h2>
-        <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL)</span>
+        <div>
+          <h2 class="screen-title" id="screen-title">Executive Dashboard</h2>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="screen-subtitle">
+            Consolidated Treasury & VLC Voucher Reconciliation Workbench
+          </div>
+        </div>
+        <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL) — Oct 2025</span>
       </div>
       <div class="header-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
         <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
         <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
+        <button class="btn-secondary btn-sm" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
+          <span>📥</span> Export
+        </button>
         <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
           <span>⚡</span> Run Reconciliation
         </button>
@@ -1121,18 +1133,24 @@
     </div>
   </div>
 
-  <!-- Export Success Modal Dialog -->
+  <!-- Export Success Modal Dialog (Adaptive for Desktop vs Web) -->
   <div class="modal-backdrop" id="export-success-modal" style="display: none;">
-    <div class="modal-dialog" style="max-width: 520px; text-align: center;">
-      <div style="font-size: 2.8rem; margin-bottom: 8px;">📊</div>
-      <h3 style="font-size: 1.2rem; color: var(--text-dark); margin-bottom: 6px;">Report Exported Successfully</h3>
-      <p style="margin: 8px 0; font-weight: 700; color: var(--primary); font-size: 0.95rem;" id="export-success-filename">Report.xlsx</p>
-      <div style="background: var(--bg-main); padding: 10px; border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-muted); word-break: break-all; margin: 12px 0;" id="export-success-path">
-        Saved to reports folder
+    <div class="modal-dialog" style="max-width: 540px; text-align: center; border-radius: 12px;">
+      <div style="font-size: 2.8rem; margin-bottom: 6px;" id="export-modal-icon">📊</div>
+      <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px;" id="export-modal-heading">Report Exported Successfully</h3>
+      <p style="margin: 8px 0; font-weight: 700; color: var(--primary); font-size: 0.95rem; font-family: monospace;" id="export-success-filename">Report.xlsx</p>
+      
+      <!-- Adaptive Content Box -->
+      <div id="export-modal-body" style="margin: 14px 0;">
+        <div style="background: var(--bg-hover); padding: 12px; border-radius: 6px; font-size: 0.82rem; color: var(--text-muted); word-break: break-all;" id="export-success-path">
+          Saved to reports folder
+        </div>
       </div>
-      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px;">
+
+      <!-- Action Buttons Container -->
+      <div id="export-modal-actions" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px;">
         <button class="btn-success" id="export-btn-open-file" onclick="openExportedFile()">
-          <span>📄</span> Open Excel File
+          <span>📊</span> Open Excel File
         </button>
         <button class="btn-primary" onclick="openReportsFolder()">
           <span>📁</span> Show in Folder

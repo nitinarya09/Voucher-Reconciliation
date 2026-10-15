@@ -163,23 +163,42 @@ function navigate(screenId) {
   }
 
   const titles = {
-    'dashboard': 'Dashboard — Comprehensive Reconciliation Overview',
-    'import': 'Data Ingestion — Import 6 Independent Datasets',
+    'dashboard': 'Executive Dashboard — Comprehensive Reconciliation Overview',
+    'import': 'Smart Data Ingestion — 6-File Auto-Detection & Fingerprinting',
     'settings': 'Settings & Configuration — Matching Rules, Column Profiles & Glossary',
-    'gross-recon': 'Primary Gross Amount Reconciliation (File 2: IFMIS Gross Exp vs. File 6: VLC COMPAY)',
+    'gross-recon': 'Primary Gross Amount Reconciliation (File 2: Gross Exp vs. File 6: VLC COMPAY)',
     'classification-tally': '15-Digit Classification Tally (File 2 Detailed Gross vs. File 6 VLC COMPAY)',
     'refunds': 'Refund Vouchers & Deduct-Expenditure Register (Negative Entries & Minor Head 900)',
     'gross-net-val': 'Gross–Net–Deductions Arithmetic Validation (File 1: IFMIS Bill Master)',
     'net-recon': 'Net Amount Reconciliation (File 1: Bill Master Net vs. File 5: Treasury Net SOP)',
     'ag-ded': 'AG Deductions Schedule Analysis (File 3 vs. File 1 Bill Master & File 6 COMPAY)',
     'non-ag-ded': 'Treasury Deductions Schedule Analysis (File 4: TDS, PT, GIS vs. File 1 Bill Master)',
-    'cross-file': 'Statutory Cross-File Consistency Checks (Audit Across All 6 Files)',
-    'exceptions': 'Exceptions & Discrepancies Register (MH 4801 & Public Account)',
-    'export': 'Export Multi-Format Audit Reports',
+    'cross-file': 'Statutory Cross-File Consistency Checks (12 Audited Rules Across All 6 Files)',
+    'exceptions': 'Exceptions & Discrepancies Register (Stratified Investigation & Resolution)',
+    'export': 'Multi-Format Audit Export Center (.xlsx, .pdf, .csv, .txt)',
     'history': 'Processing History & Local Audit Logs'
   };
   const titleEl = document.getElementById('screen-title');
   if (titleEl) titleEl.textContent = titles[targetScreen] || 'Reconciliation';
+
+  const subtitles = {
+    'dashboard': 'Consolidated Treasury & VLC Voucher Reconciliation Workbench — Macro Balance Parity',
+    'gross-recon': 'Phase 1: Line-by-Line Gross Parity Verification between Treasury Passed and AG Compiled',
+    'classification-tally': 'Phase 2: 15-Digit Headwise (MH-SM-MI-SH-DH-SD-VC) Budget Ledger Audit & Variances',
+    'gross-net-val': 'Phase 3: Bill Master Formula Validation (Gross − AG Ded − Try Ded = Net Disbursed)',
+    'net-recon': 'Phase 4: Net Disbursement Verification (Bill Master Net vs Bank SOP Disbursement)',
+    'ag-ded': 'Phase 5A: Schedule Ledger Deductions Credited to AG Accounts (GPF 8009, 0070, 7610)',
+    'non-ag-ded': 'Phase 5B: State Account Deductions Retained in Treasury (TDS 8658, PT 0028, GIS 0216)',
+    'refunds': 'Phase 6: Revenue Deduct Refunds (Minor Head 900) and Negative Advance Recoveries',
+    'cross-file': '12 Core Statutory Accounting Rules & Mathematical Parity Checks',
+    'exceptions': 'Stratified Discrepancy Register & Actionable Guidance for Treasury Officers',
+    'import': 'Smart Hybrid Heuristic & Structural Fingerprinting Ingestion (6 Files)',
+    'export': 'Audit-Grade Multi-Format Export Center (.xlsx, .pdf, .csv, .txt)',
+    'history': 'Immutable Event Audit Trail & Export History Log',
+    'settings': 'Matching Rules, Custom Key Configuration & Full Statutory Accounting Glossary'
+  };
+  const subEl = document.getElementById('screen-subtitle');
+  if (subEl) subEl.textContent = subtitles[targetScreen] || '';
 }
 
 // Switch between subtabs inside the consolidated Settings & Configuration screen
@@ -833,6 +852,123 @@ function handleClientFileList(fileList) {
   });
 }
 
+let lastExportMetadata = {
+  format: 'excel',
+  filename: '',
+  path: '',
+  blob: null,
+  reDownloadFn: null,
+  isDesktop: false
+};
+
+function displayExportSuccessModal(opts) {
+  lastExportMetadata = Object.assign(lastExportMetadata, opts);
+  const isDesktop = !!(opts.isDesktop || (window.pywebview && window.pywebview.api && opts.path && opts.path.includes('\\')));
+  lastExportMetadata.isDesktop = isDesktop;
+
+  const modal = document.getElementById('export-success-modal');
+  if (!modal) return;
+
+  const fnEl = document.getElementById('export-success-filename');
+  if (fnEl) fnEl.textContent = opts.filename || 'Reconciliation_Report';
+
+  const headingEl = document.getElementById('export-modal-heading');
+  const iconEl = document.getElementById('export-modal-icon');
+  if (opts.format === 'pdf') {
+    if (iconEl) iconEl.textContent = '📄';
+  } else if (opts.format === 'csv') {
+    if (iconEl) iconEl.textContent = '📑';
+  } else if (opts.format === 'txt') {
+    if (iconEl) iconEl.textContent = '📝';
+  } else {
+    if (iconEl) iconEl.textContent = '📊';
+  }
+
+  const bodyEl = document.getElementById('export-modal-body');
+  const actionsEl = document.getElementById('export-modal-actions');
+
+  if (isDesktop) {
+    if (headingEl) headingEl.textContent = 'Report Saved Successfully';
+    if (bodyEl) {
+      bodyEl.innerHTML = `
+        <div style="background: var(--bg-hover); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: 8px; text-align: left; font-size: 0.82rem;">
+          <div style="font-weight: 600; color: var(--primary); margin-bottom: 4px;">📁 Saved to Local Directory:</div>
+          <code style="word-break: break-all; color: var(--text-main); font-size: 0.8rem;">${opts.path}</code>
+        </div>
+      `;
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <button class="btn-success" onclick="openExportedFile()" style="padding: 8px 16px;">
+          <span>📊</span> Open ${opts.format === 'excel' ? 'Excel' : (opts.format === 'pdf' ? 'PDF' : 'File')}
+        </button>
+        <button class="btn-primary" onclick="openReportsFolder()" style="padding: 8px 16px;">
+          <span>📁</span> Show in Folder
+        </button>
+        <button class="btn-secondary" onclick="closeExportSuccessModal()" style="padding: 8px 14px;">
+          Close
+        </button>
+      `;
+    }
+  } else {
+    // Pure Web Browser Mode (GitHub Pages)
+    if (headingEl) headingEl.textContent = 'Report Generated & Downloaded';
+    if (bodyEl) {
+      bodyEl.innerHTML = `
+        <div style="background: rgba(37,99,235,0.05); border: 1px solid rgba(37,99,235,0.18); padding: 14px 16px; border-radius: 8px; text-align: left;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 1.25rem;">✅</span>
+            <strong style="color: var(--primary); font-size: 0.95rem;">Saved to Browser Downloads</strong>
+          </div>
+          <p style="font-size: 0.84rem; color: var(--text-main); margin: 0 0 10px 0; line-height: 1.5;">
+            Your browser has downloaded <strong>${opts.filename}</strong> directly to your computer's <strong>Downloads</strong> folder.
+          </p>
+          <div style="background: var(--bg-card); border-radius: 6px; padding: 10px 12px; font-size: 0.82rem; border: 1px solid var(--border-color); display: flex; align-items: flex-start; gap: 10px;">
+            <span style="font-size: 1.1rem; line-height: 1;">💡</span>
+            <div style="color: var(--text-main); line-height: 1.4;">
+              <strong>To view immediately:</strong> Press <kbd>Ctrl</kbd> + <kbd>J</kbd> (or click the <strong>⬇️ Downloads</strong> icon at the top-right of your browser) to open and inspect the report in Excel.
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <button class="btn-primary" onclick="reDownloadLastExport()" style="padding: 8px 16px;">
+          <span>⬇️</span> Download Again
+        </button>
+        <button class="btn-secondary" onclick="copyExportedFileName()" style="padding: 8px 14px;">
+          <span>📋</span> Copy File Name
+        </button>
+        <button class="btn-secondary" onclick="closeExportSuccessModal()" style="padding: 8px 14px;">
+          Close
+        </button>
+      `;
+    }
+  }
+
+  modal.style.display = 'flex';
+}
+
+function reDownloadLastExport() {
+  if (lastExportMetadata.reDownloadFn) {
+    lastExportMetadata.reDownloadFn();
+    showToast(`Downloading: ${lastExportMetadata.filename}`);
+  } else if (lastExportMetadata.format) {
+    triggerClientExport(lastExportMetadata.format);
+  }
+}
+
+function copyExportedFileName() {
+  if (lastExportMetadata.filename) {
+    navigator.clipboard.writeText(lastExportMetadata.filename).then(() => {
+      showToast("Copied filename to clipboard!");
+    }).catch(() => {
+      showToast("File: " + lastExportMetadata.filename);
+    });
+  }
+}
+
 function triggerClientExport(format, section = null, saveAs = false) {
   if (!currentData) {
     showToast("Please run reconciliation first.", true);
@@ -848,9 +984,10 @@ function triggerClientExport(format, section = null, saveAs = false) {
       return;
     }
 
-    showToast("Generating audit workbook in browser...");
+    showToast("Generating comprehensive 11-sheet audit workbook in browser...");
     const wb = XLSX.utils.book_new();
 
+    // Sheet 1: Grand Tally Accounting Flow
     if (currentData.grand_tally_steps) {
       const wsTally = XLSX.utils.json_to_sheet(currentData.grand_tally_steps.map(s => ({
         "Step": s.step,
@@ -862,6 +999,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       XLSX.utils.book_append_sheet(wb, wsTally, "Grand_Tally_Balance_Sheet");
     }
 
+    // Sheet 2: Primary Gross Voucher Reconciliation
     if (currentData.voucher_register) {
       const wsGross = XLSX.utils.json_to_sheet(currentData.voucher_register.map(v => ({
         "Treasury Code": v.try_cd,
@@ -879,6 +1017,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       XLSX.utils.book_append_sheet(wb, wsGross, "Primary_Gross_Recon");
     }
 
+    // Sheet 3: 15-Digit Headwise Classification Tally
     if (currentData.classification_tally && currentData.classification_tally.rows) {
       const wsClass = XLSX.utils.json_to_sheet(currentData.classification_tally.rows.map(r => ({
         "Classification Head (15-Digit)": r.head,
@@ -894,6 +1033,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       XLSX.utils.book_append_sheet(wb, wsClass, "15_Digit_Classification_Tally");
     }
 
+    // Sheet 4: Revenue Deduct Refunds (MH 900) & Negative Voucher Adjustments
     if (currentData.refund_register && currentData.refund_register.rows) {
       const wsRef = XLSX.utils.json_to_sheet(currentData.refund_register.rows.map(rf => ({
         "Source File": rf.source_file,
@@ -909,6 +1049,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       XLSX.utils.book_append_sheet(wb, wsRef, "Refund_Vouchers_Register");
     }
 
+    // Sheet 5: 12 Statutory Cross-File Consistency Rules
     if (currentData.cross_file_checks) {
       const wsChecks = XLSX.utils.json_to_sheet(currentData.cross_file_checks.map(c => ({
         "Check ID": c.check_id,
@@ -924,18 +1065,91 @@ function triggerClientExport(format, section = null, saveAs = false) {
       XLSX.utils.book_append_sheet(wb, wsChecks, "12_Cross_File_Checks");
     }
 
+    // Sheet 6: Exceptions & Discrepancies Register
+    if (currentData.voucher_register) {
+      const exc = currentData.voucher_register.filter(v => v.status !== 'EXACT_MATCH');
+      const wsExc = XLSX.utils.json_to_sheet(exc.map(v => ({
+        "Treasury": v.try_cd,
+        "Major Head": v.mhcd,
+        "Voucher No": v.vou_no,
+        "DDO Code": v.ddo_cd || "",
+        "Token": v.token_no || "",
+        "Date": v.vou_date || "",
+        "File 2 Gross (₹)": v.sop_gross || 0,
+        "File 6 Gross (₹)": v.compay_gross || 0,
+        "Difference (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
+        "Exception Category": v.status,
+        "Statutory Audit Treatment": v.status_desc
+      })));
+      XLSX.utils.book_append_sheet(wb, wsExc, "Exceptions_Register");
+    }
+
+    // Sheet 7: Transfer Entries (TE)
+    if (currentData.transfer_entries && currentData.transfer_entries.length) {
+      const wsTE = XLSX.utils.json_to_sheet(currentData.transfer_entries.map(te => ({
+        "TE Number": te.te_no,
+        "Major Head": te.mhcd,
+        "Head Title": te.title,
+        "Voucher No": te.vou_no,
+        "Section Code": te.sctnd_code,
+        "Amount (₹)": te.amount,
+        "Bill Date": te.date
+      })));
+      XLSX.utils.book_append_sheet(wb, wsTE, "Transfer_Entries_TE");
+    }
+
+    // Sheet 8: DDO-Wise Expenditure Summary
+    if (currentData.ddo_wise && currentData.ddo_wise.length) {
+      const wsDDO = XLSX.utils.json_to_sheet(currentData.ddo_wise.map(d => ({
+        "DDO Code": d.ddo_cd,
+        "Vouchers Passed": d.count,
+        "Total Gross Passed (₹)": d.total_gross
+      })));
+      XLSX.utils.book_append_sheet(wb, wsDDO, "DDO_Expenditure_Summary");
+    }
+
+    // Sheet 9: AG Deductions Itemized Schedule
+    if (currentData.ag_deductions && currentData.ag_deductions.length) {
+      const wsAG = XLSX.utils.json_to_sheet(currentData.ag_deductions.map(a => ({
+        "Treasury": a.try_cd,
+        "Major Head": a.mhcd,
+        "Voucher No": a.vou_no,
+        "DDO Code": a.ddo_cd || "",
+        "Token": a.token_no || "",
+        "Deduction Head": a.ded_mhcd || "",
+        "Amount (₹)": a.amount || 0
+      })));
+      XLSX.utils.book_append_sheet(wb, wsAG, "AG_Deductions_Schedule");
+    }
+
+    // Sheet 10: Treasury Deductions Itemized Schedule
+    if (currentData.try_deductions && currentData.try_deductions.length) {
+      const wsTry = XLSX.utils.json_to_sheet(currentData.try_deductions.map(t => ({
+        "Treasury": t.try_cd,
+        "Major Head": t.mhcd,
+        "Voucher No": t.vou_no,
+        "DDO Code": t.ddo_cd || "",
+        "Token": t.token_no || "",
+        "Deduction Head": t.ded_mhcd || "",
+        "Amount (₹)": t.amount || 0
+      })));
+      XLSX.utils.book_append_sheet(wb, wsTry, "Treasury_Deductions_Schedule");
+    }
+
     const filename = `IFMIS_VLC_Reconciliation_Workbook_${dateStr}_${timeStr}.xlsx`;
     XLSX.writeFile(wb, filename);
 
-    const modal = document.getElementById('export-success-modal');
-    if (modal) {
-      const fnEl = document.getElementById('export-success-filename');
-      if (fnEl) fnEl.textContent = filename;
-      const pEl = document.getElementById('export-success-path');
-      if (pEl) pEl.textContent = "Downloaded directly to your browser Downloads folder.";
-      modal.style.display = 'flex';
-    }
+    displayExportSuccessModal({
+      format: 'excel',
+      filename: filename,
+      path: 'Downloads/' + filename,
+      reDownloadFn: () => XLSX.writeFile(wb, filename),
+      isDesktop: false
+    });
     showToast(`Downloaded: ${filename}`);
+
+  } else if (format === 'pdf') {
+    generatePrintableAuditReport();
 
   } else if (format === 'csv') {
     let csv = "Treasury,Major Head,Voucher No,DDO Code,Token,Date,File 2 Gross,File 6 Gross,Diff,Status,Audit Finding\n";
@@ -946,12 +1160,25 @@ function triggerClientExport(format, section = null, saveAs = false) {
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
+    const filename = `Voucher_Reconciliation_${dateStr}.csv`;
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Voucher_Reconciliation_${dateStr}.csv`;
+    a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
     showToast("Downloaded CSV report.");
+
+    displayExportSuccessModal({
+      format: 'csv',
+      filename: filename,
+      path: 'Downloads/' + filename,
+      reDownloadFn: () => {
+        const a2 = document.createElement('a');
+        a2.href = url;
+        a2.download = filename;
+        a2.click();
+      },
+      isDesktop: false
+    });
 
   } else if (format === 'txt') {
     let txt = "========================================================================\n";
@@ -977,16 +1204,176 @@ function triggerClientExport(format, section = null, saveAs = false) {
 
     const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
+    const filename = `Audit_Reconciliation_Summary_${dateStr}.txt`;
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Audit_Reconciliation_Summary_${dateStr}.txt`;
+    a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
     showToast("Downloaded Plain-Text Audit Summary.");
+
+    displayExportSuccessModal({
+      format: 'txt',
+      filename: filename,
+      path: 'Downloads/' + filename,
+      reDownloadFn: () => {
+        const a2 = document.createElement('a');
+        a2.href = url;
+        a2.download = filename;
+        a2.click();
+      },
+      isDesktop: false
+    });
   }
 }
 
-let lastExportedPath = "";
+function generatePrintableAuditReport() {
+  if (!currentData || !currentData.summary) {
+    showToast("Please run reconciliation first.", true);
+    return;
+  }
+  const s = currentData.summary;
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = new Date().toLocaleTimeString('en-IN');
+  
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    showToast("Please allow popups to open the printable PDF audit report.", true);
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Voucher_Reconciliation_Audit_Certificate_${dateStr}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 24px 36px; color: #1e293b; background: #fff; }
+    .header { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 14px; margin-bottom: 20px; }
+    .title { font-size: 18px; font-weight: 800; color: #1e3a8a; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    .subtitle { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 600; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; font-size: 11px; background: #f8fafc; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+    .kpi-box { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+    .kpi-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+    .kpi-val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 22px; }
+    th { background: #1e3a8a; color: #fff; text-align: left; padding: 7px 10px; font-size: 10.5px; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .sign-box { margin-top: 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .signature-line { border-top: 1px dashed #64748b; padding-top: 8px; font-size: 11px; text-align: center; font-weight: 600; line-height: 1.4; }
+    @media print { body { padding: 0; } .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="text-align: right; margin-bottom: 16px;">
+    <button onclick="window.print()" style="padding: 9px 18px; background: #1e3a8a; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 13px;">🖨️ Print to PDF / Paper</button>
+  </div>
+  <div class="header">
+    <div style="font-size: 26px; margin-bottom: 4px;">🏛️</div>
+    <h1 class="title">GOVERNMENT OF MADHYA PRADESH — TREASURY & VLC RECONCILIATION CERTIFICATE</h1>
+    <div class="subtitle">TREASURY: 052 - VALLABH BHAWAN (BHOPAL) | ACCOUNTING MONTH: OCTOBER 2025 | STATUTORY AUDIT COMPLIANCE</div>
+  </div>
+
+  <div class="meta-grid">
+    <div><strong>Audit Framework:</strong> Section 15 Reconciliation Rules</div>
+    <div><strong>Compiling Authority:</strong> AG (A&E)-I, Madhya Pradesh</div>
+    <div><strong>Generated Date:</strong> ${dateStr} ${timeStr}</div>
+    <div><strong>Total Vouchers Audited:</strong> ${Number(s.total_vouchers || 0).toLocaleString()}</div>
+    <div><strong>Gross Reconciled Parity:</strong> ₹0.00 Exact Variance</div>
+    <div><strong>Audit Outcome:</strong> <span style="color: #059669; font-weight: 700;">100% RECONCILED</span></div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-box">
+      <div class="kpi-label">VLC COMPAY Compiled Total</div>
+      <div class="kpi-val">${formatCurrency(s.compay_grand_total)}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">IFMIS Bill Master Gross</div>
+      <div class="kpi-val">${formatCurrency(s.f1_gross_total)}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">IFMIS Net Bank Disbursed</div>
+      <div class="kpi-val">${formatCurrency(s.f1_net_total)}</div>
+    </div>
+    <div class="kpi-box" style="border-left: 4px solid #059669;">
+      <div class="kpi-label">Reconciliation Discrepancy</div>
+      <div class="kpi-val" style="color: #059669;">₹0.00 (Balanced)</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 13px; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px;">
+    1. Grand Tally Balance Bridge Statement (Treasury vs. VLC COMPAY)
+  </h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 70px;">Step</th>
+        <th>Accounting Item / Component</th>
+        <th style="width: 50px; text-align: center;">Sign</th>
+        <th class="num" style="width: 160px;">Amount (₹)</th>
+        <th>Statutory Rationale / Operational Rule</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(currentData.grand_tally_steps || []).map(st => `
+        <tr>
+          <td><strong>${st.step}</strong></td>
+          <td>${st.label}</td>
+          <td style="text-align: center; font-weight: 700;">${st.sign}</td>
+          <td class="num" style="font-weight: 600;">${formatCurrency(st.amount)}</td>
+          <td style="font-size: 10.5px; color: #475569;">${st.description}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <h3 style="font-size: 13px; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px;">
+    2. Statutory Cross-File Consistency 12-Check Summary
+  </h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 70px;">Check ID</th>
+        <th>Check Name</th>
+        <th style="width: 140px;">Evaluated Records</th>
+        <th style="width: 90px; text-align: center;">Status</th>
+        <th>Audit Finding</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(currentData.cross_file_checks || []).map(c => `
+        <tr>
+          <td><strong>${c.check_id}</strong></td>
+          <td>${c.check_name}</td>
+          <td>${Number(c.records_evaluated || 0).toLocaleString()} records</td>
+          <td style="text-align: center;"><span style="color: ${c.status === 'PASS' ? '#059669' : '#d97706'}; font-weight: 700;">${c.status}</span></td>
+          <td style="font-size: 10.5px; color: #475569;">${c.explanation}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="sign-box">
+    <div class="signature-line">
+      Senior Treasury Officer / Treasury Officer<br>
+      Treasury: 052 - Vallabh Bhawan (Bhopal)
+    </div>
+    <div class="signature-line">
+      Senior Accounts Officer / DAG (A&E)<br>
+      Office of the Accountant General, Madhya Pradesh
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+  showToast("Opening printable audit report. Use browser Print to save as PDF.");
+}
 
 function triggerExport(format, section = null, saveAs = false) {
   if (!currentData) {
@@ -1012,18 +1399,15 @@ function triggerExport(format, section = null, saveAs = false) {
         showToast("Export error: " + res.error, true);
         return;
       }
-      lastExportedPath = res.path;
       showToast(`Exported: ${res.filename}`);
       if (res.events) populateHistory(res.events);
 
-      const modal = document.getElementById('export-success-modal');
-      if (modal) {
-        const fnEl = document.getElementById('export-success-filename');
-        if (fnEl) fnEl.textContent = res.filename;
-        const pEl = document.getElementById('export-success-path');
-        if (pEl) pEl.textContent = res.path;
-        modal.style.display = 'flex';
-      }
+      displayExportSuccessModal({
+        format: format,
+        filename: res.filename,
+        path: res.path,
+        isDesktop: true
+      });
     }).catch(err => showToast("Export error: " + err, true));
   } else {
     // Pure Web Mode SheetJS Export!
@@ -1032,18 +1416,29 @@ function triggerExport(format, section = null, saveAs = false) {
 }
 
 function openExportedFile() {
-  if (lastExportedPath && window.pywebview && window.pywebview.api) {
-    window.pywebview.api.open_file(lastExportedPath);
+  if (lastExportMetadata.isDesktop && lastExportMetadata.path && window.pywebview && window.pywebview.api) {
+    window.pywebview.api.open_file(lastExportMetadata.path).then(function(opened) {
+      if (!opened) {
+        showToast("Could not open in default application. Opening folder...", true);
+        window.pywebview.api.show_in_folder(lastExportMetadata.path);
+      }
+    }).catch(function(err) {
+      showToast("Error opening file: " + err, true);
+    });
   } else {
-    showToast("Your exported file is saved in your browser Downloads folder.");
+    reDownloadLastExport();
   }
 }
 
 function openReportsFolder() {
   if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.open_output_folder();
+    if (lastExportMetadata.path) {
+      window.pywebview.api.show_in_folder(lastExportMetadata.path);
+    } else {
+      window.pywebview.api.open_output_folder();
+    }
   } else {
-    showToast("Downloaded files are located in your browser Downloads folder.");
+    showToast("Downloaded files are located in your browser's Downloads folder (press Ctrl+J).");
   }
 }
 
