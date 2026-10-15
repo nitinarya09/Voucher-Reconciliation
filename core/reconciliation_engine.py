@@ -5,6 +5,7 @@ Orchestrates the 6-file reconciliation process, integrating MatchingEngine,
 CrossFileValidator, and producing structured results for UI and exports.
 """
 
+import re
 from decimal import Decimal
 import pandas as pd
 from collections import defaultdict
@@ -545,6 +546,47 @@ class ComprehensiveReconciliationEngine:
                         'treatment': 'Treasury voucher booked under Minor Head 900 (Deduct Refunds)'
                     })
 
+        # Accounting Period and Treasury Jurisdiction Auto-Detection
+        month_names_map = {
+            1: ('Jan', 'January'), 2: ('Feb', 'February'), 3: ('Mar', 'March'),
+            4: ('Apr', 'April'), 5: ('May', 'May'), 6: ('Jun', 'June'),
+            7: ('Jul', 'July'), 8: ('Aug', 'August'), 9: ('Sep', 'September'),
+            10: ('Oct', 'October'), 11: ('Nov', 'November'), 12: ('Dec', 'December')
+        }
+        period_counter = defaultdict(int)
+        try_counter = defaultdict(int)
+        for v in voucher_register:
+            d = v.get('vou_date') or ''
+            t = (v.get('try_cd') or '').strip().upper()
+            if t:
+                try_counter[t] += 1
+            if d:
+                parts = re.split(r'[-/]', str(d).strip())
+                if len(parts) == 3:
+                    p0, p1, p2 = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                    y, m = None, None
+                    if len(p0) == 4 and p0.isdigit() and p1.isdigit():
+                        y, m = int(p0), int(p1)
+                    elif len(p2) == 4 and p2.isdigit() and p1.isdigit():
+                        y, m = int(p2), int(p1)
+                    elif len(p2) == 2 and p2.isdigit() and p1.isdigit():
+                        y, m = 2000 + int(p2), int(p1)
+                    if m and y and 1 <= m <= 12 and 2000 <= y <= 2099:
+                        period_counter[(m, y)] += 1
+
+        if period_counter:
+            (best_m, best_y) = max(period_counter.items(), key=lambda x: x[1])[0]
+            abbr, full = month_names_map.get(best_m, ('Mon', 'Month'))
+            accounting_period = f"{full} {best_y}"
+            period_abbr = f"{abbr} {best_y}"
+        else:
+            accounting_period = "Unknown Period"
+            period_abbr = "Unknown"
+
+        top_try = max(try_counter.items(), key=lambda x: x[1])[0] if try_counter else '052'
+        treasury_display = "052 (VAL)" if top_try in ['052', 'VAL'] else top_try
+        treasury_badge_text = f"Treasury: {treasury_display} — {period_abbr}"
+
         self.results = {
             "run_id": self.logger.run_id,
             "summary": {
@@ -569,7 +611,10 @@ class ComprehensiveReconciliationEngine:
                 "classification_missing_f2": tally_counts.get("MISSING_IN_COMPAY", 0),
                 "classification_missing_f6": tally_counts.get("MISSING_IN_IFMIS", 0),
                 "refunds_count": len(refund_register),
-                "refunds_negative_total": float(sum(Decimal(str(r['amount'])) for r in refund_register if r['amount'] < 0))
+                "refunds_negative_total": float(sum(Decimal(str(r['amount'])) for r in refund_register if r['amount'] < 0)),
+                "accounting_period": accounting_period,
+                "treasury_code": treasury_display,
+                "treasury_badge_text": treasury_badge_text
             },
             "grand_tally_steps": grand_tally_steps,
             "head_wise": head_wise,
