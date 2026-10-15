@@ -90,8 +90,9 @@
         <h2 class="screen-title" id="screen-title">Dashboard</h2>
         <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL)</span>
       </div>
-      <div class="header-right">
-        <span class="badge badge-success" id="overall-status-badge">● Ready to Process</span>
+      <div class="header-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
+        <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
         <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
           <span>⚡</span> Run Reconciliation
         </button>
@@ -167,15 +168,18 @@
       <!-- Visual Analytics & Charts Section -->
       <div class="charts-grid">
         <!-- Chart 1: Statutory Accounting Parity Flow -->
-        <div class="chart-card">
+        <div class="chart-card" style="grid-column: 1 / -1;">
           <div class="chart-card-header">
             <div class="chart-card-title">
               <span>🌊</span> Reconciliation Parity Flow (Balance Bridge)
             </div>
-            <span class="badge badge-success">Δ = ₹0.00 Exact Parity</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-success" id="bridge-parity-badge">Δ = ₹0.00 Exact Parity</span>
+              <span class="badge badge-info" style="font-size: 0.75rem;">11 Statutory Accounting Steps</span>
+            </div>
           </div>
-          <div class="chart-container" id="chart-waterfall-container">
-            <!-- SVG Waterfall Chart generated dynamically -->
+          <div class="chart-container" id="chart-waterfall-container" style="display: block; min-height: auto; padding: 0;">
+            <!-- Stepped Balance Bridge generated dynamically -->
           </div>
         </div>
 

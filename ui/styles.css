@@ -773,4 +773,213 @@ td.wrap-cell, td:last-child {
   color: var(--text-muted);
 }
 
+/* =========================================================================
+   Accounting Stepped Balance Bridge (Chart 1)
+   ========================================================================= */
+.bridge-flow-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.bridge-pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(16, 185, 129, 0.06) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 18px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bridge-pipeline-node {
+  display: flex;
+  flex-direction: column;
+}
+
+.bridge-pipeline-node .node-title {
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bridge-pipeline-node .node-val {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+  font-feature-settings: "tnum";
+}
+
+.bridge-pipeline-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--bg-hover);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.bridge-step-row {
+  display: grid;
+  grid-template-columns: 80px 38px 1fr 180px 175px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: all 0.15s ease-in-out;
+}
+
+.bridge-step-row:hover {
+  background-color: var(--bg-hover);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.bridge-step-row.is-total {
+  background-color: var(--bg-card-subtle);
+  border-left: 4px solid var(--primary);
+  font-weight: 700;
+}
+
+.bridge-step-row.is-parity {
+  background-color: rgba(16, 185, 129, 0.06);
+  border-left: 4px solid var(--success);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.bridge-step-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-align: center;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.bridge-sign-pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.bridge-sign-pill.sign-plus {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.bridge-sign-pill.sign-minus {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.bridge-sign-pill.sign-eq {
+  background-color: rgba(37, 99, 235, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.bridge-sign-pill.sign-delta {
+  background-color: rgba(5, 150, 105, 0.2);
+  color: #059669;
+  border: 1px solid rgba(5, 150, 105, 0.4);
+}
+
+.bridge-step-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bridge-step-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bridge-step-desc {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bridge-track-container {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.bridge-track {
+  height: 8px;
+  width: 100%;
+  background-color: var(--bg-hover);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-color);
+}
+
+.bridge-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bridge-amt-container {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.bridge-amt-cr {
+  font-size: 0.92rem;
+  font-weight: 800;
+  font-feature-settings: "tnum";
+}
+
+.bridge-amt-exact {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-feature-settings: "tnum";
+}
+
+@media (max-width: 900px) {
+  .bridge-step-row {
+    grid-template-columns: 60px 32px 1fr 140px;
+  }
+  .bridge-track-container {
+    display: none;
+  }
+}
+
 
