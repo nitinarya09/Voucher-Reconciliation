@@ -113,38 +113,46 @@ class DesktopReconciliationApi:
             }
         return {"file_states": file_states}
 
-    def browse_folder_and_auto_import(self):
+    def browse_folder_and_auto_import(self, criteria=None):
         """
         Opens native directory dialog to pick a folder containing reconciliation files,
         automatically identifies each of the 6 files, registers them, and returns updated states.
+        Accepts optional criteria: { treasury_code, month, year, folder_path }.
         """
-        selected_folder = ""
-        try:
-            window = webview.windows[0] if webview.windows else None
-            if window:
-                dialog_type = getattr(webview.FileDialog, 'FOLDER', getattr(webview, 'FOLDER_DIALOG', 20))
-                res = window.create_file_dialog(dialog_type)
-                if res and len(res) > 0:
-                    selected_folder = res[0]
-        except Exception:
-            pass
-
+        criteria = criteria or {}
+        selected_folder = criteria.get('folder_path', '')
         if not selected_folder:
             try:
-                from tkinter import Tk, filedialog
-                root = Tk()
-                root.withdraw()
-                root.attributes('-topmost', True)
-                selected_folder = filedialog.askdirectory(title="Select Folder Containing All Reconciliation Files")
-                root.destroy()
+                window = webview.windows[0] if webview.windows else None
+                if window:
+                    dialog_type = getattr(webview.FileDialog, 'FOLDER', getattr(webview, 'FOLDER_DIALOG', 20))
+                    res = window.create_file_dialog(dialog_type)
+                    if res and len(res) > 0:
+                        selected_folder = res[0]
             except Exception:
                 pass
+
+            if not selected_folder:
+                try:
+                    from tkinter import Tk, filedialog
+                    root = Tk()
+                    root.withdraw()
+                    root.attributes('-topmost', True)
+                    selected_folder = filedialog.askdirectory(title="Select Folder Containing All Reconciliation Files")
+                    root.destroy()
+                except Exception:
+                    pass
 
         if not selected_folder or not os.path.isdir(selected_folder):
             return {"cancelled": True}
 
         from core.file_detector import SmartFileIdentifier
-        identified, logs, unmatched = SmartFileIdentifier.scan_folder(selected_folder)
+        identified, logs, unmatched = SmartFileIdentifier.scan_folder(
+            selected_folder,
+            treasury_code=criteria.get('treasury_code'),
+            month=criteria.get('month'),
+            year=criteria.get('year')
+        )
 
         loaded_count = 0
         for fid, path in identified.items():
@@ -176,6 +184,10 @@ class DesktopReconciliationApi:
             "file_states": file_states,
             "is_all_ready": self._importer.is_all_ready()
         }
+
+    def rescan_folder(self, criteria):
+        """Re-evaluates an existing folder with updated treasury, month, or year parameters."""
+        return self.browse_folder_and_auto_import(criteria)
 
 
     def browse_file(self, file_id):

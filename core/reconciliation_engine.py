@@ -177,7 +177,10 @@ class ComprehensiveReconciliationEngine:
                     status = 'MISSING_IN_SOP'
                     desc = f"Voucher present in File 6 (COMPAY ₹{compay_gross:,.2f}), omitted from File 2 (Treasury SOP)"
             elif has_sop and not has_cp:
-                if mhcd in ['8011', '8342', '8658']:
+                if mhcd == '8443':
+                    status = 'UNCOMPILED_HEAD'
+                    desc = f"Civil Deposits (MH 8443) passed in Treasury SOP, but compiled in AG VLC Deposits & Advances Broadsheet outside COMPAY payments"
+                elif mhcd in ['8011', '8342', '8658'] or (mhcd.startswith('8') and mhcd != '8009'):
                     status = 'UNCOMPILED_HEAD'
                     desc = f"Public Account Major Head {mhcd} in File 2 not compiled in File 6 (COMPAY payments)"
                 else:
@@ -233,18 +236,22 @@ class ComprehensiveReconciliationEngine:
                                + f3_loan_amt)
         payment_discrepancy = reconciled_payments - float(tot_cp_payments)
 
+        # Dynamic uncompiled label based on heads present
+        uncomp_heads_present = sorted(list(set(v['mhcd'] for v in voucher_register if v['status'] == 'UNCOMPILED_HEAD')))
+        uncomp_label = f"Less: Uncompiled Public Account & Civil Deposits ({', '.join(uncomp_heads_present)})" if uncomp_heads_present else "Less: Uncompiled Public Account Heads"
+
         grand_tally_steps = [
-            {"step": 1, "label": "IFMIS Gross Expenditure Total (Master Bills & Classification)", "sign": "", "amount": float(tot_f2_gross), "description": "Total gross expenditure passed by Treasury across 10,471 classification lines"},
-            {"step": 2, "label": "Plus: Missing Capital Vouchers in SOP Export (MH 4801)", "sign": "+", "amount": missing_4801_amt, "description": "High-value vouchers (37, 38, 39) present in COMPAY but omitted from Treasury SOP export"},
-            {"step": 3, "label": "Less: Uncompiled Public Account Heads (MH 8011, 8342, 8658)", "sign": "-", "amount": uncompiled_amt, "description": "Public Account transactions (Insurance, Deposits, Suspense) not included in COMPAY payments"},
+            {"step": 1, "label": "IFMIS Gross Expenditure Total (Master Bills & Classification)", "sign": "", "amount": float(tot_f2_gross), "description": f"Total gross expenditure passed by Treasury across {len(voucher_register)} vouchers"},
+            {"step": 2, "label": "Plus: Missing Capital Vouchers in SOP Export (MH 4801)", "sign": "+", "amount": missing_4801_amt, "description": "High-value capital vouchers present in COMPAY but omitted from Treasury SOP export"},
+            {"step": 3, "label": uncomp_label, "sign": "-", "amount": uncompiled_amt, "description": "Public Account & Civil Deposits (Insurance, Deposits, Suspense) compiled in banking ledgers rather than COMPAY payments"},
             {"step": 4, "label": "Plus: GPF 8009 Deductions Booked as Payment Records (AG Schedule)", "sign": "+", "amount": f3_8009_amt, "description": "GPF deductions from AG Deductions Schedule booked as separate payment records under MH 8009 in COMPAY"},
             {"step": 5, "label": "Less: Administrative Recoveries Netted from Vouchers (MH 0070, PT 0028)", "sign": "-", "amount": f3_recovery_amt, "description": "Recoveries (PT, 0070, loans) deducted directly from voucher expenditure in COMPAY"},
             {"step": 6, "label": "Plus: Loan Recovery Booked to Head 6075 (AG Schedule)", "sign": "+", "amount": f3_loan_amt, "description": "Loan recovery from AG Deductions Schedule booked as an accounting entry under Major Head 6075"},
             {"step": 7, "label": "Reconciled Treasury Payments Total", "sign": "=", "amount": reconciled_payments, "description": "Exact derived treasury total after accounting for all structural adjustments"},
-            {"step": 8, "label": "COMPAY Actual Payments Total (SS_SOP = 'P')", "sign": "=", "amount": float(tot_cp_payments), "description": "Total payments in COMPAY compilation file (10,764 records)"},
-            {"step": 9, "label": "Net Payment Discrepancy", "sign": "Δ", "amount": payment_discrepancy, "description": "ZERO discrepancy (100.0000% mathematical parity)"},
-            {"step": 10, "label": "Plus: Transfer Entries (TE_NO Adjustments in COMPAY)", "sign": "+", "amount": float(tot_cp_tes), "description": "Transfer Entry records compiled directly in COMPAY (40 records)"},
-            {"step": 11, "label": "COMPAY Grand Total (COMPAY_DATA_VAL_10_2025.XLS)", "sign": "=", "amount": float(tot_cp_grand), "description": "Final compilation grand total matching the file to the last rupee"}
+            {"step": 8, "label": "COMPAY Actual Payments Total (SS_SOP = 'P')", "sign": "=", "amount": float(tot_cp_payments), "description": f"Total payments in COMPAY compilation file ({len(cp_payments)} records)"},
+            {"step": 9, "label": "Net Payment Discrepancy", "sign": "Δ", "amount": payment_discrepancy, "description": "ZERO discrepancy (100.0000% mathematical parity)" if abs(payment_discrepancy) < 0.01 else f"Discrepancy: ₹{payment_discrepancy:,.2f}"},
+            {"step": 10, "label": "Plus: Transfer Entries (TE_NO Adjustments in COMPAY)", "sign": "+", "amount": float(tot_cp_tes), "description": f"Transfer Entry records compiled directly in COMPAY ({len(cp_tes)} records)"},
+            {"step": 11, "label": "COMPAY Grand Total", "sign": "=", "amount": float(tot_cp_grand), "description": "Final compilation grand total matching the file to the last rupee"}
         ]
 
         # 6. Major Head Summary
@@ -261,7 +268,7 @@ class ComprehensiveReconciliationEngine:
 
             if abs(diff_g) < 0.01: h_st = "EXACT MATCH"
             elif mh == '4801': h_st = f"MISSING IN SOP (+₹{diff_g:,.2f})"
-            elif mh in ['8011', '8342', '8658']: h_st = "UNCOMPILED IN COMPAY"
+            elif mh in ['8011', '8342', '8443', '8658'] or (mh.startswith('8') and mh != '8009'): h_st = "UNCOMPILED IN COMPAY"
             elif mh == '8009': h_st = "GPF DEDUCTIONS BOOKED"
             else: h_st = f"DIFFERENCE (₹{diff_g:,.2f})"
 

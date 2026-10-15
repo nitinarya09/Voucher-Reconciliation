@@ -236,31 +236,51 @@ kbd {
 }
 
 header {
-  height: 60px;
+  min-height: 60px;
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  padding: 0 24px;
+  padding: 10px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  gap: 16px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .screen-title {
   font-size: 1.15rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+.header-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.header-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .content-pane {
@@ -463,14 +483,18 @@ button {
 /* Tables */
 .table-responsive {
   width: 100%;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: 6px;
+  position: relative;
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.825rem;
 }
 
@@ -482,6 +506,27 @@ thead th {
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
   text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 0 var(--border-color);
+}
+
+.table-top-total-row {
+  position: sticky;
+  top: 38px;
+  z-index: 9;
+  background-color: rgba(37, 99, 235, 0.09) !important;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.table-top-total-row td {
+  padding: 9px 12px;
+  border-bottom: 2px solid var(--primary) !important;
+  font-weight: 700;
+  color: var(--text-main);
+  background-color: rgba(37, 99, 235, 0.09) !important;
 }
 
 tbody td {
@@ -496,6 +541,203 @@ tbody tr:hover {
 
 .num-col { text-align: right; font-variant-numeric: tabular-nums; }
 .center-col { text-align: center; }
+
+/* Excel-Style Column Filters */
+.col-header-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.col-filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.72rem;
+  border-radius: 3px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.col-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--primary);
+}
+
+.col-filter-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.excel-filter-popup {
+  position: fixed;
+  z-index: 99999;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  width: 260px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  padding: 10px;
+}
+
+.excel-filter-search {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-app);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.excel-filter-search:focus {
+  border-color: var(--border-focus);
+}
+
+.excel-filter-actions {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px 6px 4px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+}
+
+.excel-filter-actions a {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.excel-filter-actions a:hover {
+  text-decoration: underline;
+}
+
+.excel-filter-list {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px;
+  margin-bottom: 10px;
+}
+
+.excel-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.excel-filter-item:hover {
+  background: var(--bg-hover);
+}
+
+.excel-filter-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.filter-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.filter-active-clear-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0 2px;
+}
+
+/* Ingestion Parameter Configuration Bar */
+.ingestion-config-bar {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.ingestion-config-grid {
+  display: grid;
+  grid-template-columns: 2.2fr 1.2fr 1fr auto;
+  gap: 14px;
+  align-items: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .ingestion-config-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .ingestion-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.config-field label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.config-select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-app);
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.config-select:focus {
+  border-color: var(--border-focus);
+}
 
 /* Filter & Search Bar */
 .filter-bar {

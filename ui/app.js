@@ -1,17 +1,80 @@
-// =========================================================================
-// IFMIS–VLC Voucher Reconciliation Tool — Client Application Logic
-// =========================================================================
+/// Master Catalog of all 58 Madhya Pradesh Treasuries
+const MP_TREASURIES = [
+  {"code": "010", "short_code": "BAL", "name": "BALAGHAT TREASURY", "display": "010 - BAL - BALAGHAT TREASURY"},
+  {"code": "020", "short_code": "BAD", "name": "Barwani District Treasury", "display": "020 - BAD - Barwani District Treasury"},
+  {"code": "030", "short_code": "BET", "name": "Betul District Treasury", "display": "030 - BET - Betul District Treasury"},
+  {"code": "040", "short_code": "BHI", "name": "Bhind Treasury", "display": "040 - BHI - Bhind Treasury"},
+  {"code": "050", "short_code": "BPL", "name": "District Treasury Office Bhopal", "display": "050 - BPL - District Treasury Office Bhopal"},
+  {"code": "051", "short_code": "VIN", "name": "Vindhyachal Treasury", "display": "051 - VIN - Vindhyachal Treasury"},
+  {"code": "052", "short_code": "VAL", "name": "Vallabh Bhawan Treasury, Bhopal", "display": "052 - VAL - Vallabh Bhawan Treasury, Bhopal"},
+  {"code": "054", "short_code": "CTB", "name": "Principal Treasury Officer Centre Treasury Bhopal", "display": "054 - CTB - Principal Treasury Officer Centre Treasury Bhopal"},
+  {"code": "060", "short_code": "CHA", "name": "Chhatarpur Treasury", "display": "060 - CHA - Chhatarpur Treasury"},
+  {"code": "070", "short_code": "CHI", "name": "Chhindwara Treasury", "display": "070 - CHI - Chhindwara Treasury"},
+  {"code": "080", "short_code": "DAM", "name": "Damoh Treasury", "display": "080 - DAM - Damoh Treasury"},
+  {"code": "090", "short_code": "DAT", "name": "Datia Treasury", "display": "090 - DAT - Datia Treasury"},
+  {"code": "100", "short_code": "DEW", "name": "Dewas Treasury", "display": "100 - DEW - Dewas Treasury"},
+  {"code": "110", "short_code": "DHA", "name": "Dhar Treasury", "display": "110 - DHA - Dhar Treasury"},
+  {"code": "120", "short_code": "DIN", "name": "Dindori Treasury", "display": "120 - DIN - Dindori Treasury"},
+  {"code": "130", "short_code": "GUN", "name": "Guna Treasury", "display": "130 - GUN - Guna Treasury"},
+  {"code": "140", "short_code": "GWL", "name": "Gwalior Gorkhi Treasury", "display": "140 - GWL - Gwalior Gorkhi Treasury"},
+  {"code": "141", "short_code": "MML", "name": "Motimahal Gwalior Treasury", "display": "141 - MML - Motimahal Gwalior Treasury"},
+  {"code": "150", "short_code": "HAR", "name": "Harda Treasury", "display": "150 - HAR - Harda Treasury"},
+  {"code": "160", "short_code": "HOS", "name": "Hoshangabad Treasury", "display": "160 - HOS - Hoshangabad Treasury"},
+  {"code": "170", "short_code": "IND", "name": "Indore District Treasury", "display": "170 - IND - Indore District Treasury"},
+  {"code": "171", "short_code": "INC", "name": "Indore City Treasury", "display": "171 - INC - Indore City Treasury"},
+  {"code": "180", "short_code": "JBP", "name": "Jabalpur District Treasury", "display": "180 - JBP - Jabalpur District Treasury"},
+  {"code": "181", "short_code": "JBP", "name": "Jabalpur City Treasury", "display": "181 - JBP - Jabalpur City Treasury"},
+  {"code": "190", "short_code": "JHA", "name": "Jhabua Treasury", "display": "190 - JHA - Jhabua Treasury"},
+  {"code": "200", "short_code": "KAT", "name": "Katni Treasury", "display": "200 - KAT - Katni Treasury"},
+  {"code": "210", "short_code": "KHA", "name": "Khandva Treasury", "display": "210 - KHA - Khandva Treasury"},
+  {"code": "220", "short_code": "KAR", "name": "Khargaun Treasury", "display": "220 - KAR - Khargaun Treasury"},
+  {"code": "230", "short_code": "MAN", "name": "Mandla Treasury", "display": "230 - MAN - Mandla Treasury"},
+  {"code": "240", "short_code": "MND", "name": "Mandsaur Treasury", "display": "240 - MND - Mandsaur Treasury"},
+  {"code": "250", "short_code": "MOE", "name": "Morena Treasury", "display": "250 - MOE - Morena Treasury"},
+  {"code": "260", "short_code": "NAR", "name": "Narsinghpur Treasury", "display": "260 - NAR - Narsinghpur Treasury"},
+  {"code": "270", "short_code": "NEE", "name": "Neemuch District Treasury", "display": "270 - NEE - Neemuch District Treasury"},
+  {"code": "280", "short_code": "PAN", "name": "Panna Treasury", "display": "280 - PAN - Panna Treasury"},
+  {"code": "290", "short_code": "RIS", "name": "Raisen Treasury", "display": "290 - RIS - Raisen Treasury"},
+  {"code": "300", "short_code": "RAJ", "name": "Rajgarh Treasury", "display": "300 - RAJ - Rajgarh Treasury"},
+  {"code": "310", "short_code": "RAT", "name": "Ratlam Treasury", "display": "310 - RAT - Ratlam Treasury"},
+  {"code": "320", "short_code": "REW", "name": "Rewa Treasury", "display": "320 - REW - Rewa Treasury"},
+  {"code": "330", "short_code": "SAG", "name": "Sagar Treasury", "display": "330 - SAG - Sagar Treasury"},
+  {"code": "340", "short_code": "SAT", "name": "Satna Treasury", "display": "340 - SAT - Satna Treasury"},
+  {"code": "350", "short_code": "SEH", "name": "Sehore Treasury", "display": "350 - SEH - Sehore Treasury"},
+  {"code": "360", "short_code": "SEO", "name": "Seoni Treasury", "display": "360 - SEO - Seoni Treasury"},
+  {"code": "370", "short_code": "SHA", "name": "Shahdol Treasury", "display": "370 - SHA - Shahdol Treasury"},
+  {"code": "380", "short_code": "SAJ", "name": "Shajapur Treasury", "display": "380 - SAJ - Shajapur Treasury"},
+  {"code": "390", "short_code": "SHI", "name": "Shivpuri Treasury", "display": "390 - SHI - Shivpuri Treasury"},
+  {"code": "400", "short_code": "SHE", "name": "Sheopur Treasury", "display": "400 - SHE - Sheopur Treasury"},
+  {"code": "410", "short_code": "SID", "name": "Seedhi Treasury", "display": "410 - SID - Seedhi Treasury"},
+  {"code": "420", "short_code": "TIK", "name": "Tikamgarh Treasury", "display": "420 - TIK - Tikamgarh Treasury"},
+  {"code": "430", "short_code": "UJJ", "name": "Ujjain Treasury", "display": "430 - UJJ - Ujjain Treasury"},
+  {"code": "440", "short_code": "UMA", "name": "Umaria Treasury", "display": "440 - UMA - Umaria Treasury"},
+  {"code": "450", "short_code": "VID", "name": "Vidisha Treasury", "display": "450 - VID - Vidisha Treasury"},
+  {"code": "460", "short_code": "ANU", "name": "Anupur Treasury", "display": "460 - ANU - Anupur Treasury"},
+  {"code": "470", "short_code": "ASH", "name": "Ashoknagar Treasury", "display": "470 - ASH - Ashoknagar Treasury"},
+  {"code": "480", "short_code": "BUR", "name": "Burhanpur Treasury", "display": "480 - BUR - Burhanpur Treasury"},
+  {"code": "490", "short_code": "ALI", "name": "Alirajpur Treasury", "display": "490 - ALI - Alirajpur Treasury"},
+  {"code": "500", "short_code": "SNG", "name": "Singrauli Treasury", "display": "500 - SNG - Singrauli Treasury"},
+  {"code": "510", "short_code": "AGR", "name": "Agar Malwa Treasury", "display": "510 - AGR - Agar Malwa Treasury"},
+  {"code": "520", "short_code": "NIW", "name": "District Treasury Office Niwari", "display": "520 - NIW - District Treasury Office Niwari"}
+];
 
 let currentData = null;
 let currentScreen = 'dashboard';
+let lastScannedFolder = '';
+
+// Excel Column Filters State
+let activeColumnFilters = {
+  gross: {},
+  classification: {}
+};
+let currentOpenFilter = null;
+
 let filteredGrossVouchers = [];
-let grossCurrentPage = 1;
-const grossPageSize = 50;
 let currentGrossStatusFilter = 'ALL';
 
 let filteredClassificationRows = [];
-let classCurrentPage = 1;
-const classPageSize = 50;
 let currentClassStatusFilter = 'ALL';
 
 let filteredRefundRows = [];
@@ -352,6 +415,7 @@ function populateHistory(events) {
 // Main Initialization Function
 function initApp() {
   initTheme();
+  populateTreasuryDropdown();
   renderFileCards();
   populateColumnMapping();
 
@@ -384,8 +448,51 @@ function initApp() {
   }
 }
 
+function populateTreasuryDropdown() {
+  const select = document.getElementById('import-treasury-select');
+  if (!select) return;
+  select.innerHTML = '';
+  MP_TREASURIES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.code;
+    opt.textContent = t.display;
+    if (t.code === '052' || t.short_code === 'VAL') {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
+}
+
+function onIngestionParamChange() {
+  const trySelect = document.getElementById('import-treasury-select');
+  const monthSelect = document.getElementById('import-month-select');
+  const yearSelect = document.getElementById('import-year-select');
+
+  const criteria = {
+    treasury_code: trySelect ? trySelect.value : '052',
+    month: monthSelect ? monthSelect.value : '04',
+    year: yearSelect ? yearSelect.value : '2025',
+    folder_path: lastScannedFolder || ''
+  };
+
+  if (lastScannedFolder && window.pywebview && window.pywebview.api) {
+    showToast(`Re-scanning folder for ${criteria.month}/${criteria.year} (Treasury: ${criteria.treasury_code})...`);
+    window.pywebview.api.rescan_folder(criteria).then(function(res) {
+      if (res && res.file_states) {
+        fileStates = res.file_states;
+        renderFileCards();
+      }
+      renderFolderImportStatus(res);
+      showToast(`Auto-detected ${res.loaded_count || 0} matching files for ${criteria.month}/${criteria.year}!`);
+    }).catch(err => {
+      console.error("rescan_folder error:", err);
+    });
+  }
+}
+
 function onReady() {
   initTheme();
+  populateTreasuryDropdown();
   renderFileCards();
   populateColumnMapping();
   setupClientFileHandlers();
@@ -411,12 +518,25 @@ if (window.pywebview && window.pywebview.api) {
 }
 
 function browseFolderAndAutoImport() {
+  const trySelect = document.getElementById('import-treasury-select');
+  const monthSelect = document.getElementById('import-month-select');
+  const yearSelect = document.getElementById('import-year-select');
+
+  const criteria = {
+    treasury_code: trySelect ? trySelect.value : '052',
+    month: monthSelect ? monthSelect.value : '04',
+    year: yearSelect ? yearSelect.value : '2025'
+  };
+
   if (window.pywebview && window.pywebview.api) {
     showToast("Opening folder browser...");
-    window.pywebview.api.browse_folder_and_auto_import().then(function(res) {
+    window.pywebview.api.browse_folder_and_auto_import(criteria).then(function(res) {
       if (!res || res.cancelled) {
         showToast("Folder selection cancelled.");
         return;
+      }
+      if (res.folder) {
+        lastScannedFolder = res.folder;
       }
       if (res.file_states) {
         fileStates = res.file_states;
@@ -438,7 +558,7 @@ function browseFolderAndAutoImport() {
     if (fi) {
       fi.onchange = function(e) {
         if (e.target.files && e.target.files.length > 0) {
-          handleClientFileList(e.target.files);
+          handleClientFileList(e.target.files, criteria);
         }
         fi.value = '';
       };
@@ -1639,9 +1759,13 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
         missing4801Amt += cpGross;
       }
     } else if (hasSop && !hasCp) {
-      if (['8011', '8342', '8658'].includes(mhcd)) {
+      if (mhcd === '8443') {
         status = 'UNCOMPILED_HEAD';
-        statusDesc = `Public Account MH ${mhcd} not compiled in COMPAY payments`;
+        statusDesc = 'Civil Deposits (MH 8443) passed in Treasury SOP, compiled in AG VLC Deposits & Advances Broadsheet outside COMPAY payments';
+        uncompiledAmt += sopGross;
+      } else if (['8011', '8342', '8658'].includes(mhcd) || (mhcd.startsWith('8') && mhcd !== '8009')) {
+        status = 'UNCOMPILED_HEAD';
+        statusDesc = `Public Account MH ${mhcd} compiled in separate broadsheet (not in COMPAY payments)`;
         uncompiledAmt += sopGross;
       } else {
         status = 'MISSING_IN_COMPAY';
@@ -1704,7 +1828,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   const grandTallySteps = [
     { step: 1, label: "File 2 / File 1 Gross Total (Detailed Classification)", sign: "", amount: f2GrossTotal, description: `Total gross expenditure passed by Treasury across ${f2VouGrp.size || f1Map.size} vouchers` },
     { step: 2, label: "Plus: Missing Capital Vouchers in SOP Export (MH 4801)", sign: "+", amount: missing4801Amt, description: "Capital vouchers present in COMPAY but omitted from Treasury SOP export" },
-    { step: 3, label: "Less: Uncompiled Public Account Heads (MH 8011, 8342, 8658)", sign: "-", amount: uncompiledAmt, description: "Public Account transactions not included in COMPAY payments" },
+    { step: 3, label: "Less: Uncompiled Public Account & Deposits Heads (MH 8011, 8342, 8443, 8658)", sign: "-", amount: uncompiledAmt, description: "Public Account & Civil Deposits transactions compiled in separate broadsheets outside COMPAY payments" },
     { step: 4, label: "Plus: GPF 8009 Deductions Booked as Payment Records", sign: "+", amount: f3GpfTotal, description: "GPF deductions from File 3 booked as payment records in COMPAY" },
     { step: 5, label: "Less: Administrative Recoveries Netted from Vouchers (MH 0070, etc.)", sign: "-", amount: f3RecoveryTotal, description: "Recoveries deducted directly from voucher expenditure in COMPAY" },
     { step: 6, label: "Plus: Loan Recovery Booked to Head 6075", sign: "+", amount: f3LoanTotal, description: "Loan recovery from File 3 booked as an accounting entry under MH 6075" },
@@ -3060,26 +3184,103 @@ function populateAllScreens(data) {
       }
     }
 
-    // 7. Exceptions (MH 4801 Vouchers 37, 38, 39)
+    // 7A. Exceptions: Section 1 - Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits MH 8443 / Uncompiled Payments)
+    const exMissingCompayBody = document.getElementById('exceptions-missing-compay-body');
+    const exMissingCompayTopTotal = document.getElementById('exc-missing-compay-top-total');
+    const exMissingCompayBadge = document.getElementById('exc-missing-compay-badge');
+    const exMissingCompayTitle = document.getElementById('exc-missing-compay-title');
+
+    if (exMissingCompayBody && data.voucher_register) {
+      exMissingCompayBody.innerHTML = '';
+      const missingCompayVouchers = data.voucher_register.filter(v => v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY');
+      
+      let totSopGross = 0;
+      let totSopNet = 0;
+      missingCompayVouchers.forEach(v => {
+        totSopGross += (v.sop_gross || 0);
+        totSopNet += (v.file1_net || 0);
+      });
+
+      if (exMissingCompayBadge) {
+        exMissingCompayBadge.textContent = `${missingCompayVouchers.length} Vouchers (${formatCurrency(totSopGross)})`;
+        exMissingCompayBadge.className = missingCompayVouchers.length > 0 ? 'badge badge-warning' : 'badge badge-success';
+      }
+
+      if (exMissingCompayTopTotal) {
+        if (missingCompayVouchers.length > 0) {
+          exMissingCompayTopTotal.innerHTML = `
+            <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+            <td class="center-col" style="font-weight: 800; color: var(--primary);">${missingCompayVouchers.length} Vouchers</td>
+            <td style="font-weight: 600;">Various DDOs</td>
+            <td class="center-col">-</td>
+            <td class="center-col">-</td>
+            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopGross)}</td>
+            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopNet)}</td>
+            <td class="center-col"><span class="badge badge-warning">UNCOMPILED IN COMPAY</span></td>
+            <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Total: ${formatCurrency(totSopGross)} accounted in Grand Tally Step 3</td>
+          `;
+        } else {
+          exMissingCompayTopTotal.innerHTML = `<td colspan="9" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero vouchers omitted from COMPAY in this period.</td>`;
+        }
+      }
+
+      if (missingCompayVouchers.length > 0) {
+        missingCompayVouchers.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="center-col"><strong>${m.mhcd}</strong></td>
+            <td class="center-col" style="color: var(--warning); font-weight: 700;">${m.vou_no}</td>
+            <td>${m.ddo_cd || '-'}</td>
+            <td class="center-col">${m.token_no || '-'}</td>
+            <td class="center-col">${m.vou_date || '-'}</td>
+            <td class="num-col" style="color: var(--text-main); font-weight: 700;">${formatCurrency(m.sop_gross)}</td>
+            <td class="num-col">${formatCurrency(m.file1_net)}</td>
+            <td class="center-col"><span class="badge badge-warning">${m.status}</span></td>
+            <td style="font-size: 0.8rem; line-height: 1.4; color: var(--text-color);">${m.status_desc}</td>
+          `;
+          exMissingCompayBody.appendChild(tr);
+        });
+      } else {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 16px;">No vouchers in Treasury SOP were omitted from VLC COMPAY.</td>`;
+        exMissingCompayBody.appendChild(tr);
+      }
+    }
+
+    // 7B. Exceptions: Section 2 - Missing Capital Vouchers in SOP Export (e.g. MH 4801 in Oct)
     const ex4801Body = document.getElementById('exceptions-4801-body');
+    const exMissingSopBadge = document.getElementById('exc-missing-sop-badge');
     if (ex4801Body && data.voucher_register) {
       ex4801Body.innerHTML = '';
       const missing4801 = data.voucher_register.filter(v => v.status === 'MISSING_IN_SOP');
-      missing4801.forEach(m => {
+      const tot4801Amt = missing4801.reduce((acc, m) => acc + (m.compay_gross || 0), 0);
+
+      if (exMissingSopBadge) {
+        exMissingSopBadge.textContent = `${missing4801.length} Vouchers (${formatCurrency(tot4801Amt)})`;
+        exMissingSopBadge.className = missing4801.length > 0 ? 'badge badge-danger' : 'badge badge-success';
+      }
+
+      if (missing4801.length > 0) {
+        missing4801.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="center-col"><strong>${m.mhcd}</strong></td>
+            <td class="center-col" style="color: var(--danger); font-weight: 700;">${m.vou_no}</td>
+            <td>${m.ddo_cd || '-'}</td>
+            <td class="center-col">${m.vou_date || '-'}</td>
+            <td class="num-col" style="color: var(--danger); font-weight: 700;">${formatCurrency(m.compay_gross)}</td>
+            <td>${m.status_desc}</td>
+          `;
+          ex4801Body.appendChild(tr);
+        });
+      } else {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="center-col"><strong>${m.mhcd}</strong></td>
-          <td class="center-col" style="color: var(--danger); font-weight: 700;">${m.vou_no}</td>
-          <td>${m.ddo_cd || '-'}</td>
-          <td class="center-col">${m.vou_date || '14-10-2025'}</td>
-          <td class="num-col" style="color: var(--danger); font-weight: 700;">${formatCurrency(m.compay_gross)}</td>
-          <td>${m.status_desc}</td>
-        `;
+        tr.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">Zero capital vouchers omitted from SOP in this accounting period.</td>`;
         ex4801Body.appendChild(tr);
-      });
+      }
     }
 
-    // 8. Uncompiled Heads (8011, 8342, 8658)
+    // 8. Exceptions: Section 3 - Uncompiled Heads Summary (8011, 8342, 8443, 8658)
     const uncompBody = document.getElementById('exceptions-uncompiled-body');
     if (uncompBody && data.voucher_register) {
       uncompBody.innerHTML = '';
@@ -3090,20 +3291,31 @@ function populateAllScreens(data) {
         uncompMap[v.mhcd].gross += (v.sop_gross || 0);
         uncompMap[v.mhcd].net += (v.file1_net || 0);
       });
-      Object.keys(uncompMap).forEach(mh => {
-        const it = uncompMap[mh];
+      const uncompKeys = Object.keys(uncompMap);
+      if (uncompKeys.length > 0) {
+        uncompKeys.forEach(mh => {
+          const it = uncompMap[mh];
+          const tr = document.createElement('tr');
+          let cat = getMajorHeadTitle(mh);
+          if (mh === '8443') cat = 'Civil Deposits (Separate Deposits Broadsheet)';
+          else if (mh === '8011') cat = 'Insurance & Pension (GIS)';
+          else if (mh === '8342') cat = 'Other Deposits / NPS';
+          else if (mh === '8658') cat = 'Suspense Accounts';
+          tr.innerHTML = `
+            <td class="center-col"><strong>${mh}</strong></td>
+            <td>${cat}</td>
+            <td class="center-col">${it.count}</td>
+            <td class="num-col">${formatCurrency(it.gross)}</td>
+            <td class="num-col">${formatCurrency(it.net)}</td>
+            <td><span class="badge badge-warning">Public Account / Deposits (Outside COMPAY)</span></td>
+          `;
+          uncompBody.appendChild(tr);
+        });
+      } else {
         const tr = document.createElement('tr');
-        let cat = mh === '8011' ? 'Insurance & Pension (GIS)' : (mh === '8342' ? 'Other Deposits / NPS' : 'Suspense Accounts');
-        tr.innerHTML = `
-          <td class="center-col"><strong>${mh}</strong></td>
-          <td>${cat}</td>
-          <td class="center-col">${it.count}</td>
-          <td class="num-col">${formatCurrency(it.gross)}</td>
-          <td class="num-col">${formatCurrency(it.net)}</td>
-          <td><span class="badge badge-warning">Public Account (Outside Consolidated Fund)</span></td>
-        `;
+        tr.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">Zero uncompiled heads in this period.</td>`;
         uncompBody.appendChild(tr);
-      });
+      }
     }
 
     // 9. AG Deductions Table (File 3)
@@ -3157,6 +3369,311 @@ function populateAllScreens(data) {
   }
 }
 
+// =========================================================================
+// EXCEL-STYLE COLUMN FILTERING ENGINE & STICKY TOP TOTAL ROWS
+// =========================================================================
+
+function openExcelFilter(event, tableKey, colKey) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  closeExcelFilter();
+
+  const dataset = (tableKey === 'gross')
+    ? (currentData && currentData.voucher_register ? currentData.voucher_register : [])
+    : (currentData && currentData.classification_tally && currentData.classification_tally.rows ? currentData.classification_tally.rows : []);
+
+  if (!dataset || dataset.length === 0) {
+    showToast("No data available to filter.", true);
+    return;
+  }
+
+  // Collect distinct values and counts
+  const valCounts = new Map();
+  dataset.forEach(row => {
+    let val = row[colKey];
+    if (val === undefined || val === null || val === '') val = '(Blank)';
+    val = String(val);
+    valCounts.set(val, (valCounts.get(val) || 0) + 1);
+  });
+
+  // Sort values
+  const sortedVals = Array.from(valCounts.keys()).sort((a, b) => {
+    const na = parseFloat(a);
+    const nb = parseFloat(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b);
+  });
+
+  // Current active selections for this column
+  const currentSet = (activeColumnFilters[tableKey] && activeColumnFilters[tableKey][colKey])
+    ? activeColumnFilters[tableKey][colKey]
+    : null; // null means all currently selected
+
+  const colTitles = {
+    mhcd: 'Major Head',
+    vou_no: 'Voucher Number',
+    ddo_cd: 'DDO Code',
+    vou_date: 'Voucher Date',
+    status: 'Match Status',
+    head: 'Classification Head (15-Digit)',
+    title: 'Major Head Description'
+  };
+  const title = colTitles[colKey] || colKey;
+
+  // Create popup DOM element
+  let popup = document.getElementById('excel-filter-popup');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = 'excel-filter-popup';
+    popup.className = 'excel-filter-popup';
+    document.body.appendChild(popup);
+  }
+
+  currentOpenFilter = { tableKey, colKey, btn: event.currentTarget || event.target };
+
+  let listHtml = '';
+  sortedVals.forEach(v => {
+    const isChecked = currentSet ? currentSet.has(v) : true;
+    const cnt = valCounts.get(v);
+    const safeVal = v.replace(/"/g, '&quot;');
+    listHtml += `
+      <label class="excel-filter-item" style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 0.8rem; cursor: pointer; border-radius: 4px;">
+        <input type="checkbox" class="excel-filter-cb" value="${safeVal}" ${isChecked ? 'checked' : ''}>
+        <span class="excel-filter-val" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${safeVal}">${v}</span>
+        <span style="font-size: 0.72rem; color: var(--text-muted); font-feature-settings: 'tnum';">(${cnt})</span>
+      </label>
+    `;
+  });
+
+  popup.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; margin-bottom: 8px;">
+      <div style="font-weight: 700; font-size: 0.84rem; color: var(--text-main);">Filter: ${title}</div>
+      <button onclick="closeExcelFilter()" style="background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--text-muted);">&times;</button>
+    </div>
+    <div style="margin-bottom: 8px;">
+      <input type="text" class="excel-filter-search" placeholder="Search values..." oninput="onFilterSearchInput(this)" style="width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: 4px;">
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+      <button class="btn-secondary btn-sm" onclick="setAllFilterCheckboxes(true)" style="padding: 2px 8px; font-size: 0.72rem; flex: 1;">Select All</button>
+      <button class="btn-secondary btn-sm" onclick="setAllFilterCheckboxes(false)" style="padding: 2px 8px; font-size: 0.72rem; flex: 1;">Clear All</button>
+    </div>
+    <div class="excel-filter-list" id="excel-filter-items-container" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-main); margin-bottom: 10px;">
+      ${listHtml}
+    </div>
+    <div style="display: flex; justify-content: space-between; gap: 8px;">
+      <button class="btn-primary btn-sm" onclick="applyExcelFilter('${tableKey}', '${colKey}')" style="flex: 1; padding: 5px 10px; font-weight: 700;">Apply</button>
+      <button class="btn-secondary btn-sm" onclick="clearExcelFilter('${tableKey}', '${colKey}')" style="flex: 1; padding: 5px 10px;">Clear Filter</button>
+    </div>
+  `;
+
+  // Position popup next to clicked element
+  const rect = (event.currentTarget || event.target).getBoundingClientRect();
+  popup.style.display = 'flex';
+  
+  let left = rect.left;
+  let top = rect.bottom + 4;
+  if (left + 260 > window.innerWidth) {
+    left = window.innerWidth - 275;
+  }
+  if (top + 320 > window.innerHeight) {
+    top = Math.max(10, rect.top - 325);
+  }
+  popup.style.left = `${Math.max(10, left)}px`;
+  popup.style.top = `${Math.max(10, top)}px`;
+
+  setTimeout(() => {
+    document.addEventListener('click', onDocClickCloseFilter);
+  }, 10);
+}
+
+function onDocClickCloseFilter(e) {
+  const popup = document.getElementById('excel-filter-popup');
+  if (popup && !popup.contains(e.target)) {
+    closeExcelFilter();
+  }
+}
+
+function closeExcelFilter() {
+  const popup = document.getElementById('excel-filter-popup');
+  if (popup) popup.style.display = 'none';
+  currentOpenFilter = null;
+  document.removeEventListener('click', onDocClickCloseFilter);
+}
+
+function onFilterSearchInput(input) {
+  const q = (input.value || '').toLowerCase().trim();
+  const items = document.querySelectorAll('#excel-filter-items-container .excel-filter-item');
+  items.forEach(it => {
+    const valText = (it.querySelector('.excel-filter-val')?.textContent || '').toLowerCase();
+    it.style.display = (!q || valText.includes(q)) ? 'flex' : 'none';
+  });
+}
+
+function setAllFilterCheckboxes(selectAll) {
+  const cbs = document.querySelectorAll('#excel-filter-items-container .excel-filter-cb');
+  cbs.forEach(cb => {
+    const parent = cb.closest('.excel-filter-item');
+    if (parent && parent.style.display !== 'none') {
+      cb.checked = selectAll;
+    }
+  });
+}
+
+function applyExcelFilter(tableKey, colKey) {
+  const cbs = document.querySelectorAll('#excel-filter-items-container .excel-filter-cb');
+  const checkedVals = new Set();
+  let totalVisible = 0;
+  cbs.forEach(cb => {
+    totalVisible++;
+    if (cb.checked) checkedVals.add(cb.value);
+  });
+
+  if (!activeColumnFilters[tableKey]) activeColumnFilters[tableKey] = {};
+
+  if (checkedVals.size === totalVisible) {
+    delete activeColumnFilters[tableKey][colKey];
+  } else {
+    activeColumnFilters[tableKey][colKey] = checkedVals;
+  }
+
+  updateFilterButtonState(tableKey, colKey);
+  closeExcelFilter();
+
+  if (tableKey === 'gross') {
+    applyGrossFilters();
+  } else if (tableKey === 'classification') {
+    applyClassificationFilters();
+  }
+}
+
+function clearExcelFilter(tableKey, colKey) {
+  if (activeColumnFilters[tableKey]) {
+    delete activeColumnFilters[tableKey][colKey];
+  }
+  updateFilterButtonState(tableKey, colKey);
+  closeExcelFilter();
+
+  if (tableKey === 'gross') {
+    applyGrossFilters();
+  } else if (tableKey === 'classification') {
+    applyClassificationFilters();
+  }
+}
+
+function clearAllExcelFilters(tableKey) {
+  activeColumnFilters[tableKey] = {};
+  document.querySelectorAll(`.col-filter-btn[id*="filter-btn-${tableKey}"]`).forEach(btn => {
+    btn.classList.remove('active');
+    btn.innerHTML = '⛛';
+    btn.title = 'Filter column';
+  });
+  if (tableKey === 'gross') {
+    applyGrossFilters();
+  } else if (tableKey === 'classification') {
+    applyClassificationFilters();
+  }
+  showToast(`Cleared all filters on ${tableKey === 'gross' ? 'Primary Gross Recon' : 'Classification Tally'} table.`);
+}
+
+function updateFilterButtonState(tableKey, colKey) {
+  const btn = document.getElementById(`filter-btn-${tableKey}-${colKey}`);
+  if (!btn) return;
+  const isFiltered = activeColumnFilters[tableKey] && activeColumnFilters[tableKey][colKey] && activeColumnFilters[tableKey][colKey].size > 0;
+  if (isFiltered) {
+    btn.classList.add('active');
+    btn.innerHTML = '▼✓';
+    btn.title = `Active Filter (${activeColumnFilters[tableKey][colKey].size} selected) — Click to modify`;
+  } else {
+    btn.classList.remove('active');
+    btn.innerHTML = '⛛';
+    btn.title = 'Filter column';
+  }
+}
+
+function renderGrossTopTotalRow(records) {
+  const totalRow = document.getElementById('gross-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="10" style="text-align: center; color: var(--text-muted); padding: 8px;">No vouchers match active filter criteria</td>`;
+    return;
+  }
+
+  let totalSop = 0;
+  let totalCompay = 0;
+  let exactCount = 0;
+  const distinctDDOs = new Set();
+  const distinctMhcds = new Set();
+
+  records.forEach(v => {
+    totalSop += (v.sop_gross || 0);
+    totalCompay += (v.compay_gross || 0);
+    if (v.status === 'EXACT_MATCH') exactCount++;
+    if (v.ddo_cd) distinctDDOs.add(v.ddo_cd);
+    if (v.mhcd) distinctMhcds.add(v.mhcd);
+  });
+
+  const totalDiff = totalSop - totalCompay;
+  const exactPct = ((exactCount / totalCount) * 100).toFixed(1);
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Vouchers</td>
+    <td style="font-weight: 600; color: var(--text-main);">${distinctDDOs.size} DDOs (${distinctMhcds.size} MH)</td>
+    <td class="center-col" style="color: var(--text-muted);">-</td>
+    <td class="center-col" style="color: var(--text-muted);">-</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalSop)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalCompay)}</td>
+    <td class="num-col" style="font-weight: 800; color: ${Math.abs(totalDiff) < 0.01 ? 'var(--success)' : 'var(--danger)'}; font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
+    <td class="center-col"><span class="badge ${Math.abs(totalDiff) < 0.01 ? 'badge-success' : 'badge-warning'}">${exactCount === totalCount ? '100% MATCH' : `${exactCount.toLocaleString()} (${exactPct}%) Match`}</span></td>
+    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Column Total Summary for ${totalCount.toLocaleString()} visible records</td>
+  `;
+}
+
+function renderClassTopTotalRow(records) {
+  const totalRow = document.getElementById('class-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 8px;">No budget heads match active filter criteria</td>`;
+    return;
+  }
+
+  let totalF2Count = 0;
+  let totalF2Gross = 0;
+  let totalF6Count = 0;
+  let totalF6Gross = 0;
+  let exactCount = 0;
+
+  records.forEach(r => {
+    totalF2Count += (r.f2_count || 0);
+    totalF2Gross += (r.f2_gross || 0);
+    totalF6Count += (r.f6_count || 0);
+    totalF6Gross += (r.f6_gross || 0);
+    if (r.status === 'EXACT_MATCH') exactCount++;
+  });
+
+  const totalDiff = totalF2Gross - totalF6Gross;
+  const exactPct = ((exactCount / totalCount) * 100).toFixed(1);
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Distinct 15-Digit Heads</td>
+    <td class="center-col" style="font-weight: 700;">${totalF2Count.toLocaleString()}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalF2Gross)}</td>
+    <td class="center-col" style="font-weight: 700;">${totalF6Count.toLocaleString()}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalF6Gross)}</td>
+    <td class="num-col" style="font-weight: 800; color: ${Math.abs(totalDiff) < 0.01 ? 'var(--success)' : 'var(--warning)'}; font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
+    <td class="center-col"><span class="badge ${Math.abs(totalDiff) < 0.01 ? 'badge-success' : 'badge-warning'}">${exactCount === totalCount ? '100% PARITY' : `${exactCount.toLocaleString()} (${exactPct}%) Exact`}</span></td>
+    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Cumulative 15-Digit Classification Summary</td>
+  `;
+}
+
 let grossSortCol = null;
 let grossSortAsc = true;
 
@@ -3193,7 +3710,6 @@ function sortGrossTable(col) {
     return grossSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
   });
 
-  grossCurrentPage = 1;
   renderGrossTable();
 }
 
@@ -3215,9 +3731,23 @@ function applyGrossFilters() {
   if (!currentData || !currentData.voucher_register) return;
   const q = (document.getElementById('gross-search') ? document.getElementById('gross-search').value : '').toLowerCase().trim();
 
+  const activeFilters = activeColumnFilters.gross || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
   filteredGrossVouchers = currentData.voucher_register.filter(v => {
+    // 1. Status Pill
     const matchStatus = (currentGrossStatusFilter === 'ALL') || (v.status === currentGrossStatusFilter);
     if (!matchStatus) return false;
+
+    // 2. Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // 3. Search Box Query
     if (!q) return true;
     return (
       (v.mhcd || '').toLowerCase().includes(q) ||
@@ -3229,7 +3759,6 @@ function applyGrossFilters() {
     );
   });
 
-  grossCurrentPage = 1;
   const badge = document.getElementById('gross-recon-badge');
   if (badge) badge.textContent = `${filteredGrossVouchers.length.toLocaleString()} Vouchers`;
   renderGrossTable();
@@ -3240,22 +3769,26 @@ function renderGrossTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  // Render sticky top total row dynamically
+  renderGrossTopTotalRow(filteredGrossVouchers);
+
   const total = filteredGrossVouchers.length;
-  const start = (grossCurrentPage - 1) * grossPageSize;
-  const end = Math.min(start + grossPageSize, total);
+  const summaryEl = document.getElementById('gross-table-summary');
+  const hasActiveFilters = Object.keys(activeColumnFilters.gross || {}).some(k => activeColumnFilters.gross[k] && activeColumnFilters.gross[k].size > 0);
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span>Showing all <strong>${total.toLocaleString()}</strong> vouchers (100% visible on 1 page with continuous scroll)</span>
+        ${hasActiveFilters ? `<button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('gross')">Reset All Column Filters</button>` : ''}
+      </div>
+    `;
+  }
 
-  const infoEl = document.getElementById('gross-page-info');
-  if (infoEl) infoEl.textContent = `Showing ${total === 0 ? 0 : start + 1} to ${end} of ${total.toLocaleString()}`;
-
-  const numEl = document.getElementById('gross-page-num');
-  if (numEl) numEl.textContent = grossCurrentPage;
-
-  const pageItems = filteredGrossVouchers.slice(start, end);
-  pageItems.forEach(v => {
+  filteredGrossVouchers.forEach(v => {
     const tr = document.createElement('tr');
     let badgeClass = 'badge-success';
     if (v.status === 'MISSING_IN_SOP') badgeClass = 'badge-danger';
-    else if (v.status === 'UNCOMPILED_HEAD') badgeClass = 'badge-warning';
+    else if (v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY') badgeClass = 'badge-warning';
     else if (v.status.includes('NETTED') || v.status.includes('GPF')) badgeClass = 'badge-info';
 
     const diff = (v.sop_gross || 0) - (v.compay_gross || 0);
@@ -3288,17 +3821,11 @@ function renderGrossTable() {
 }
 
 function grossPrevPage() {
-  if (grossCurrentPage > 1) {
-    grossCurrentPage--;
-    renderGrossTable();
-  }
+  // Legacy stub - single page continuous rendering active
 }
 
 function grossNextPage() {
-  if (grossCurrentPage * grossPageSize < filteredGrossVouchers.length) {
-    grossCurrentPage++;
-    renderGrossTable();
-  }
+  // Legacy stub - single page continuous rendering active
 }
 
 // =========================================================================
@@ -3324,7 +3851,6 @@ function populateClassificationTally(tallyData) {
   if (badge) badge.textContent = `${(tallyData.total_heads || 0).toLocaleString()} Heads`;
 
   filteredClassificationRows = tallyData.rows || [];
-  classCurrentPage = 1;
   applyClassificationFilters();
 }
 
@@ -3339,7 +3865,6 @@ function setClassificationFilter(st) {
     const oc = btn.getAttribute('onclick') || '';
     if (oc.includes(`'${st}'`)) btn.classList.add('active');
   });
-  classCurrentPage = 1;
   applyClassificationFilters();
 }
 
@@ -3347,17 +3872,29 @@ function applyClassificationFilters() {
   if (!currentData || !currentData.classification_tally || !currentData.classification_tally.rows) return;
   const q = (document.getElementById('class-search') ? document.getElementById('class-search').value : '').toLowerCase().trim();
 
+  const activeFilters = activeColumnFilters.classification || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
   filteredClassificationRows = currentData.classification_tally.rows.filter(r => {
+    // 1. Status Pill
     let matchStatus = true;
     if (currentClassStatusFilter === 'DIFF_ONLY') {
       matchStatus = r.status !== 'EXACT_MATCH';
     } else if (currentClassStatusFilter !== 'ALL') {
       matchStatus = r.status === currentClassStatusFilter;
     }
-
     if (!matchStatus) return false;
-    if (!q) return true;
 
+    // 2. Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = r[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // 3. Search Box Query
+    if (!q) return true;
     return (
       (r.head && r.head.toLowerCase().includes(q)) ||
       (r.mhcd && r.mhcd.toLowerCase().includes(q)) ||
@@ -3367,6 +3904,8 @@ function applyClassificationFilters() {
     );
   });
 
+  const badge = document.getElementById('class-tally-badge');
+  if (badge) badge.textContent = `${filteredClassificationRows.length.toLocaleString()} Heads`;
   renderClassificationTable();
 }
 
@@ -3397,7 +3936,6 @@ function sortClassificationTable(col) {
     return classSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
   });
 
-  classCurrentPage = 1;
   renderClassificationTable();
 }
 
@@ -3417,20 +3955,21 @@ function renderClassificationTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  // Render sticky top total row dynamically
+  renderClassTopTotalRow(filteredClassificationRows);
+
   const total = filteredClassificationRows.length;
-  const start = (classCurrentPage - 1) * classPageSize;
-  const end = Math.min(start + classPageSize, total);
-
-  const infoEl = document.getElementById('class-page-info');
+  const hasActiveFilters = Object.keys(activeColumnFilters.classification || {}).some(k => activeColumnFilters.classification[k] && activeColumnFilters.classification[k].size > 0);
+  const infoEl = document.getElementById('class-table-summary') || document.getElementById('class-page-info');
   if (infoEl) {
-    infoEl.textContent = total > 0 ? `Showing ${start + 1} to ${end} of ${total.toLocaleString()} heads` : 'No heads match filter';
+    infoEl.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span>Showing all <strong>${total.toLocaleString()}</strong> 15-digit heads (100% visible on 1 page with continuous scroll)</span>
+        ${hasActiveFilters ? `<button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('classification')">Reset All Column Filters</button>` : ''}
+      </div>
+    `;
   }
-
-  const numEl = document.getElementById('class-page-num');
-  if (numEl) numEl.textContent = classCurrentPage;
-
-  const pageItems = filteredClassificationRows.slice(start, end);
-  pageItems.forEach(r => {
+  filteredClassificationRows.forEach(r => {
     const tr = document.createElement('tr');
     let badgeClass = 'badge-success';
     if (r.status === 'RECLASSIFIED_IN_VLC') badgeClass = 'badge-warning';
@@ -3513,17 +4052,11 @@ function renderClassificationTable() {
 }
 
 function classPrevPage() {
-  if (classCurrentPage > 1) {
-    classCurrentPage--;
-    renderClassificationTable();
-  }
+  // Legacy stub - single page continuous rendering active
 }
 
 function classNextPage() {
-  if (classCurrentPage * classPageSize < filteredClassificationRows.length) {
-    classCurrentPage++;
-    renderClassificationTable();
-  }
+  // Legacy stub - single page continuous rendering active
 }
 
 // =========================================================================

@@ -21,13 +21,19 @@
     </div>
 
     <div class="nav-menu">
-      <!-- Workspace 1: Executive Audit -->
+      <!-- Workspace 1: Data Ingestion (Primary Workflow Starting Point) -->
+      <div class="nav-section-title">DATA INGESTION</div>
+      <button class="nav-item" onclick="navigate('import')">
+        <span class="nav-icon">📂</span> <span class="nav-text">Smart File Ingestion (6 Files)</span>
+      </button>
+
+      <!-- Workspace 2: Executive Audit -->
       <div class="nav-section-title">EXECUTIVE AUDIT</div>
       <button class="nav-item active" onclick="navigate('dashboard')">
         <span class="nav-icon">📊</span> <span class="nav-text">Executive Dashboard</span>
       </button>
 
-      <!-- Workspace 2: Core Reconciliation Workbench -->
+      <!-- Workspace 3: Core Reconciliation Workbench -->
       <div class="nav-section-title">RECONCILIATION WORKBENCH</div>
       <button class="nav-item" onclick="navigate('gross-recon')">
         <span class="nav-icon">⚖️</span> <span class="nav-text">Gross Parity (File 02 vs 06)</span>
@@ -51,7 +57,7 @@
         <span class="nav-icon">💸</span> <span class="nav-text">Refunds & Deduct-Exp (MH 900)</span>
       </button>
 
-      <!-- Workspace 3: Compliance & Exceptions -->
+      <!-- Workspace 4: Compliance & Exceptions -->
       <div class="nav-section-title">COMPLIANCE & EXCEPTIONS</div>
       <button class="nav-item" onclick="navigate('cross-file')">
         <span class="nav-icon">🔍</span> <span class="nav-text">12 Statutory Consistency Rules</span>
@@ -60,11 +66,8 @@
         <span class="nav-icon">⚠️</span> <span class="nav-text">Exceptions & Discrepancies</span>
       </button>
 
-      <!-- Workspace 4: Data & Reporting -->
+      <!-- Workspace 5: Data & Reporting -->
       <div class="nav-section-title">DATA & REPORTING</div>
-      <button class="nav-item" onclick="navigate('import')">
-        <span class="nav-icon">📂</span> <span class="nav-text">Smart File Ingestion (6 Files)</span>
-      </button>
       <button class="nav-item" onclick="navigate('export')">
         <span class="nav-icon">📥</span> <span class="nav-text">Multi-Format Export Center</span>
       </button>
@@ -99,15 +102,22 @@
         </div>
         <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL) — Oct 2025</span>
       </div>
-      <div class="header-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
-        <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
-        <button class="btn-secondary btn-sm" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
-          <span>📥</span> Export
-        </button>
-        <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
-          <span>⚡</span> Run Reconciliation
-        </button>
+      <div class="header-right">
+        <div class="header-badge-group">
+          <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
+          <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
+        </div>
+        <div class="header-action-group">
+          <button class="btn-secondary btn-sm" onclick="navigate('import')" title="Go to File Ingestion">
+            <span>📂</span> Ingestion
+          </button>
+          <button class="btn-secondary btn-sm" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
+            <span>📥</span> Export
+          </button>
+          <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
+            <span>⚡</span> Run Reconciliation
+          </button>
+        </div>
       </div>
     </header>
 
@@ -259,28 +269,75 @@
 
     <!-- SECTION 2: Import Files (6 Files) -->
     <div id="pane-import" class="content-pane">
-      <div class="panel" style="margin-bottom: 4px;">
-        <div class="panel-title" style="margin-bottom: 10px;">
-          <span>📂 Ingestion Mode: Folder Auto-Discovery or Individual File Selection</span>
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <button class="btn-primary" onclick="browseFolderAndAutoImport()">
-              <span>📁</span> Import All from Folder (Auto-Detect)
+      <!-- Target Period & Treasury Selection Bar -->
+      <div class="ingestion-config-bar">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+              <span>🎯</span> Select Target Period & Treasury Jurisdiction
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              Folder scanner auto-filters and links the 6 matching files for this specific Treasury and Month/Year.
+            </div>
+          </div>
+          <button class="btn-primary" id="btn-recon-import-pane" onclick="runFullReconciliation()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: #059669; font-weight: 700; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);">
+            <span>⚡</span> Run Full Reconciliation Audit Now
+          </button>
+        </div>
+
+        <div class="ingestion-config-grid">
+          <div class="config-field">
+            <label for="import-treasury-select">Treasury (All 58 MP Treasuries):</label>
+            <select id="import-treasury-select" class="config-select" onchange="onIngestionParamChange()">
+              <!-- Populated dynamically from all 58 treasuries -->
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="import-month-select">Accounting Month:</label>
+            <select id="import-month-select" class="config-select" onchange="onIngestionParamChange()">
+              <option value="01">01 - January</option>
+              <option value="02">02 - February</option>
+              <option value="03">03 - March</option>
+              <option value="04" selected>04 - April</option>
+              <option value="05">05 - May</option>
+              <option value="06">06 - June</option>
+              <option value="07">07 - July</option>
+              <option value="08">08 - August</option>
+              <option value="09">09 - September</option>
+              <option value="10">10 - October</option>
+              <option value="11">11 - November</option>
+              <option value="12">12 - December</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="import-year-select">Financial Year:</label>
+            <select id="import-year-select" class="config-select" onchange="onIngestionParamChange()">
+              <option value="2024">2024</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+          <div class="config-field" style="display: flex; gap: 8px;">
+            <button class="btn-primary" onclick="browseFolderAndAutoImport()" style="height: 38px; white-space: nowrap;">
+              <span>📁</span> Select Folder (Auto-Scan)
             </button>
-            <button class="btn-secondary" onclick="loadDefaultFiles()">
-              <span>🔄</span> Load Default Files
-            </button>
-            <button class="btn-primary" id="btn-recon-import-pane" onclick="runFullReconciliation()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: #059669; font-weight: 700; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);">
-              <span>⚡</span> Run Reconciliation Now
+            <button class="btn-secondary" onclick="loadDefaultFiles()" style="height: 38px;" title="Reset to Verified Default Files">
+              <span>🔄</span> Default
             </button>
           </div>
         </div>
-        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 4px;">
-          💡 <strong>Smart Folder Ingestion:</strong> Point to any folder containing your six files. The built-in scanner automatically inspects filenames and deep content signatures (column counts, budget classification headers, and AG vs. Treasury deduction codes) to classify and load File 1 through File 6. You can also browse, preview, or replace files individually below.
+      </div>
+
+      <div class="panel" style="margin-bottom: 4px; padding: 14px 20px;">
+        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+          💡 <strong>Intelligent Multi-Period Folder Scanner:</strong> When selecting a root folder containing multiple months or multiple treasuries (e.g. <code>DATA VAL</code>), the scanner automatically filters by the chosen Treasury, Month, and Year to link the exact 6 files. You can preview, verify, or individually re-select any file below.
         </p>
         <div id="folder-import-status" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 6px; font-size: 0.82rem; background: var(--success-bg); border: 1px solid var(--success-border); color: var(--text-main);">
           <!-- Populated dynamically on folder import -->
         </div>
       </div>
+
       <div class="file-cards-grid" id="file-cards-container">
         <!-- 6 File Cards generated by JavaScript -->
       </div>
@@ -289,8 +346,8 @@
           <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">Ready to Reconcile Vouchers</div>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Click to execute full 3-way multi-file parity matching across all loaded datasets.</div>
         </div>
-        <button class="btn-primary" id="btn-recon-import-bottom" onclick="runFullReconciliation()" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight: 700; padding: 10px 24px; font-size: 0.92rem; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);">
-          <span>⚡</span> Run Full Reconciliation
+        <button class="btn-primary" id="btn-recon-import-bottom" onclick="runFullReconciliation()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: #059669; font-weight: 700; padding: 10px 24px; font-size: 0.92rem; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);">
+          <span>⚡</span> Run Full Reconciliation Audit Now
         </button>
       </div>
     </div>
@@ -338,36 +395,60 @@
             <button class="pill" onclick="setGrossFilter('UNCOMPILED_HEAD')">Uncompiled Heads</button>
             <button class="pill" onclick="setGrossFilter('GPF_COMBINED')">GPF Combined</button>
           </div>
+          <div id="gross-active-filters" style="display: none;"></div>
         </div>
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col sortable" onclick="sortGrossTable('mhcd')">MHCD <span class="sort-arrow" id="sort-gross-mhcd">↕</span></th>
-                <th class="center-col sortable" onclick="sortGrossTable('vou_no')">Vou No <span class="sort-arrow" id="sort-gross-vou_no">↕</span></th>
-                <th class="sortable" onclick="sortGrossTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-gross-ddo_cd">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortGrossTable('mhcd')">MHCD <span class="sort-arrow" id="sort-gross-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-gross-mhcd" onclick="openExcelFilter(event, 'gross', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortGrossTable('vou_no')">Vou No <span class="sort-arrow" id="sort-gross-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-gross-vou_no" onclick="openExcelFilter(event, 'gross', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortGrossTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-gross-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-gross-ddo_cd" onclick="openExcelFilter(event, 'gross', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
                 <th class="center-col sortable" onclick="sortGrossTable('token_no')">Token <span class="sort-arrow" id="sort-gross-token_no">↕</span></th>
-                <th class="center-col sortable" onclick="sortGrossTable('vou_date')">Date <span class="sort-arrow" id="sort-gross-vou_date">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortGrossTable('vou_date')">Date <span class="sort-arrow" id="sort-gross-vou_date">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-gross-vou_date" onclick="openExcelFilter(event, 'gross', 'vou_date')" title="Filter by Date">⛛</button>
+                  </div>
+                </th>
                 <th class="num-col sortable" onclick="sortGrossTable('sop_gross')">File 2: IFMIS Gross Exp (₹) <span class="sort-arrow" id="sort-gross-sop_gross">↕</span></th>
                 <th class="num-col sortable" onclick="sortGrossTable('compay_gross')">File 6: COMPAY Gross (₹) <span class="sort-arrow" id="sort-gross-compay_gross">↕</span></th>
                 <th class="num-col sortable" onclick="sortGrossTable('diff')">Gross Diff (₹) <span class="sort-arrow" id="sort-gross-diff">↕</span></th>
-                <th class="center-col sortable" onclick="sortGrossTable('status')">Match Status <span class="sort-arrow" id="sort-gross-status">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortGrossTable('status')">Match Status <span class="sort-arrow" id="sort-gross-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-gross-status" onclick="openExcelFilter(event, 'gross', 'status')" title="Filter by Match Status">⛛</button>
+                  </div>
+                </th>
                 <th>Audit Finding / Accounting Treatment</th>
               </tr>
             </thead>
+            <tbody id="gross-total-body">
+              <tr class="table-top-total-row" id="gross-top-total-row">
+                <!-- Populated dynamically -->
+              </tr>
+            </tbody>
             <tbody id="gross-table-body">
-              <!-- Dynamically populated -->
+              <!-- Dynamically populated (All visible on 1 page) -->
             </tbody>
           </table>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);">
-          <div id="gross-page-info">Showing 1 to 50 of 0</div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn-secondary btn-sm" onclick="grossPrevPage()">Previous</button>
-            <span id="gross-page-num" style="font-weight: 600; padding: 4px 8px;">1</span>
-            <button class="btn-secondary btn-sm" onclick="grossNextPage()">Next</button>
-          </div>
-        </div>
+        <div id="gross-table-summary" style="margin-top: 10px; font-size: 0.82rem; color: var(--text-muted); font-weight: 600;"></div>
       </div>
     </div>
 
@@ -438,31 +519,44 @@
           <table>
             <thead>
               <tr>
-                <th class="center-col sortable" onclick="sortClassificationTable('head')">Classification Head (15-Digit) <span class="sort-arrow" id="sort-class-head">↕</span></th>
-                <th class="sortable" onclick="sortClassificationTable('title')">Major Head Description <span class="sort-arrow" id="sort-class-title">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortClassificationTable('head')">Classification Head (15-Digit) <span class="sort-arrow" id="sort-class-head">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-class-head" onclick="openExcelFilter(event, 'classification', 'head')" title="Filter by Classification Head">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortClassificationTable('title')">Major Head Description <span class="sort-arrow" id="sort-class-title">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-class-title" onclick="openExcelFilter(event, 'classification', 'title')" title="Filter by Description">⛛</button>
+                  </div>
+                </th>
                 <th class="center-col sortable" onclick="sortClassificationTable('f2_count')">File 2 Lines <span class="sort-arrow" id="sort-class-f2_count">↕</span></th>
                 <th class="num-col sortable" onclick="sortClassificationTable('f2_gross')">File 2: Gross (₹) <span class="sort-arrow" id="sort-class-f2_gross">↕</span></th>
                 <th class="center-col sortable" onclick="sortClassificationTable('f6_count')">File 6 Lines <span class="sort-arrow" id="sort-class-f6_count">↕</span></th>
                 <th class="num-col sortable" onclick="sortClassificationTable('f6_gross')">File 6: COMPAY (₹) <span class="sort-arrow" id="sort-class-f6_gross">↕</span></th>
                 <th class="num-col sortable" onclick="sortClassificationTable('diff')">Difference (₹) <span class="sort-arrow" id="sort-class-diff">↕</span></th>
-                <th class="center-col sortable" onclick="sortClassificationTable('status')">Status <span class="sort-arrow" id="sort-class-status">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortClassificationTable('status')">Status <span class="sort-arrow" id="sort-class-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-class-status" onclick="openExcelFilter(event, 'classification', 'status')" title="Filter by Status">⛛</button>
+                  </div>
+                </th>
                 <th>Audit Rationale & Classification Notes</th>
               </tr>
             </thead>
+            <tbody id="class-total-body">
+              <tr class="table-top-total-row" id="class-top-total-row">
+                <!-- Populated dynamically -->
+              </tr>
+            </tbody>
             <tbody id="classification-table-body">
-              <!-- Dynamically populated -->
+              <!-- Dynamically populated (All visible on 1 page) -->
             </tbody>
           </table>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);">
-          <div id="class-page-info">Showing 1 to 50 of 0</div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn-secondary btn-sm" onclick="classPrevPage()">Previous</button>
-            <span id="class-page-num" style="font-weight: 600; padding: 4px 8px;">1</span>
-            <button class="btn-secondary btn-sm" onclick="classNextPage()">Next</button>
-          </div>
-        </div>
+        <div id="class-table-summary" style="margin-top: 10px; font-size: 0.82rem; color: var(--text-muted); font-weight: 600;"></div>
       </div>
     </div>
 
@@ -774,21 +868,72 @@
 
     <!-- SECTION 11: Exceptions and Discrepancies -->
     <div id="pane-exceptions" class="content-pane">
-      <!-- Missing High-Value Vouchers -->
-      <div class="panel" style="border-left: 4px solid var(--danger);">
-        <div class="panel-title" style="color: var(--danger); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>🚨 High-Value Capital Vouchers Omitted from SOP Export (MH 4801 — ₹1,250 Crores)</span>
+      <!-- Executive Variance Summary Card -->
+      <div class="panel" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(30, 58, 138, 0.08) 100%); border-left: 4px solid var(--primary);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;" id="exc-summary-heading">
+              📋 Statutory Audit Exceptions & Accounting Discrepancy Breakdown
+            </h3>
+            <div style="font-size: 0.82rem; color: var(--text-muted);" id="exc-summary-sub">
+              Detailed registers of vouchers explaining all structural reconciliation variances between Treasury and AG VLC compilation.
+            </div>
+          </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn-success btn-sm" onclick="triggerExport('excel', 'exceptions')">
-              <span>📊</span> Export Excel
+              <span>📊</span> Export Exceptions (Excel)
             </button>
             <button class="btn-secondary btn-sm" onclick="triggerExport('excel', 'exceptions', true)">
               <span>💾</span> Save As...
             </button>
           </div>
         </div>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-          These 3 payment vouchers are present in the AG Compilation file (dated 14-10-2025) but were completely skipped in the Treasury SOP export files (<code style="color: #60a5fa;">1_0521020253sop.txt</code> jumps directly from Voucher 36 to 40).
+      </div>
+
+      <!-- Section 1: Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits MH 8443 / Uncompiled Payments) -->
+      <div class="panel" style="border-left: 4px solid var(--warning);" id="exc-missing-compay-panel">
+        <div class="panel-title" style="color: var(--warning); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <span id="exc-missing-compay-title">📂 Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits & Uncompiled Payments)</span>
+          <span class="badge badge-warning" id="exc-missing-compay-badge">0 Vouchers</span>
+        </div>
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-missing-compay-desc">
+          These vouchers were authorized and disbursed by the District Treasury in the Schedule of Payments (SOP), but are omitted from VLC COMPAY Consolidated Fund expenditure payments (e.g., compiled in separate Deposits & Advances broadsheets).
+        </p>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th class="center-col">Major Head</th>
+                <th class="center-col">Voucher No</th>
+                <th>DDO Code</th>
+                <th class="center-col">Token No</th>
+                <th class="center-col">Bill Date</th>
+                <th class="num-col">SOP Gross (₹)</th>
+                <th class="num-col">SOP Net (₹)</th>
+                <th class="center-col">Classification Status</th>
+                <th>Statutory Audit Impact & Justification</th>
+              </tr>
+            </thead>
+            <tbody id="exc-missing-compay-total-body">
+              <tr class="table-top-total-row" id="exc-missing-compay-top-total">
+                <!-- Dynamically populated -->
+              </tr>
+            </tbody>
+            <tbody id="exceptions-missing-compay-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section 2: Missing High-Value Vouchers in SOP Export (e.g. MH 4801 Energy in Oct) -->
+      <div class="panel" style="border-left: 4px solid var(--danger);" id="exc-missing-sop-panel">
+        <div class="panel-title" style="color: var(--danger); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <span id="exc-missing-sop-title">🚨 High-Value Capital Vouchers in COMPAY Omitted from Treasury SOP Export (MH 4801)</span>
+          <span class="badge badge-danger" id="exc-missing-sop-badge">0 Vouchers</span>
+        </div>
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-missing-sop-desc">
+          These payment vouchers are present in the AG Compilation file but were skipped in the Treasury SOP export files (e.g., processed at Secretariat level via Letter of Credit / direct book transfer).
         </p>
         <div class="table-responsive">
           <table>
@@ -799,9 +944,14 @@
                 <th>DDO Code</th>
                 <th class="center-col">Bill Date</th>
                 <th class="num-col">Amount (₹)</th>
-                <th>Audit Impact</th>
+                <th>Audit Impact / Statutory Rule</th>
               </tr>
             </thead>
+            <tbody id="exc-missing-sop-total-body">
+              <tr class="table-top-total-row" id="exc-missing-sop-top-total">
+                <!-- Dynamically populated -->
+              </tr>
+            </tbody>
             <tbody id="exceptions-4801-body">
               <!-- Populated dynamically -->
             </tbody>
@@ -809,10 +959,10 @@
         </div>
       </div>
 
-      <!-- Uncompiled Public Account Heads -->
-      <div class="panel" style="border-left: 4px solid var(--warning);">
-        <div class="panel-title" style="color: var(--warning);">
-          <span>📂 Public Account Vouchers Omitted from COMPAY (₹20.86 Crores)</span>
+      <!-- Section 3: Uncompiled Public Account Heads Summary -->
+      <div class="panel" style="border-left: 4px solid var(--info);">
+        <div class="panel-title" style="color: var(--info);">
+          <span id="exc-uncompiled-title">📂 Public Account Heads Summary (Banking & Trust Ledgers)</span>
         </div>
         <div class="table-responsive">
           <table>
@@ -823,9 +973,14 @@
                 <th class="center-col">Vouchers</th>
                 <th class="num-col">Total Gross (₹)</th>
                 <th class="num-col">Total Net (₹)</th>
-                <th>Classification Scope</th>
+                <th>Classification Scope & Accounting Treatment</th>
               </tr>
             </thead>
+            <tbody id="exc-uncompiled-total-body">
+              <tr class="table-top-total-row" id="exc-uncompiled-top-total">
+                <!-- Dynamically populated -->
+              </tr>
+            </tbody>
             <tbody id="exceptions-uncompiled-body">
               <!-- Populated dynamically -->
             </tbody>

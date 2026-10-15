@@ -1,0 +1,350 @@
+[
+  {
+    "code": "010",
+    "short_code": "BAL",
+    "name": "BALAGHAT TREASURY",
+    "display": "010 - BAL - BALAGHAT TREASURY"
+  },
+  {
+    "code": "020",
+    "short_code": "BAD",
+    "name": "Barwani District Treasury",
+    "display": "020 - BAD - Barwani District Treasury"
+  },
+  {
+    "code": "030",
+    "short_code": "BET",
+    "name": "Betul District Treasury",
+    "display": "030 - BET - Betul District Treasury"
+  },
+  {
+    "code": "040",
+    "short_code": "BHI",
+    "name": "Bhind Treasury",
+    "display": "040 - BHI - Bhind Treasury"
+  },
+  {
+    "code": "050",
+    "short_code": "BPL",
+    "name": "District Treasury Office Bhopal",
+    "display": "050 - BPL - District Treasury Office Bhopal"
+  },
+  {
+    "code": "051",
+    "short_code": "VIN",
+    "name": "Vindhyachal Treasury",
+    "display": "051 - VIN - Vindhyachal Treasury"
+  },
+  {
+    "code": "052",
+    "short_code": "VAL",
+    "name": "Vallabh Bhawan Treasury, Bhopal",
+    "display": "052 - VAL - Vallabh Bhawan Treasury, Bhopal"
+  },
+  {
+    "code": "054",
+    "short_code": "CTB",
+    "name": "Principal Treasury Officer Centre Treasury Bhopal",
+    "display": "054 - CTB - Principal Treasury Officer Centre Treasury Bhopal"
+  },
+  {
+    "code": "060",
+    "short_code": "CHA",
+    "name": "Chhatarpur Treasury",
+    "display": "060 - CHA - Chhatarpur Treasury"
+  },
+  {
+    "code": "070",
+    "short_code": "CHI",
+    "name": "Chhindwara Treasury",
+    "display": "070 - CHI - Chhindwara Treasury"
+  },
+  {
+    "code": "080",
+    "short_code": "DAM",
+    "name": "Damoh Treasury",
+    "display": "080 - DAM - Damoh Treasury"
+  },
+  {
+    "code": "090",
+    "short_code": "DAT",
+    "name": "Datia Treasury",
+    "display": "090 - DAT - Datia Treasury"
+  },
+  {
+    "code": "100",
+    "short_code": "DEW",
+    "name": "Dewas Treasury",
+    "display": "100 - DEW - Dewas Treasury"
+  },
+  {
+    "code": "110",
+    "short_code": "DHA",
+    "name": "Dhar Treasury",
+    "display": "110 - DHA - Dhar Treasury"
+  },
+  {
+    "code": "120",
+    "short_code": "DIN",
+    "name": "Dindori Treasury",
+    "display": "120 - DIN - Dindori Treasury"
+  },
+  {
+    "code": "130",
+    "short_code": "GUN",
+    "name": "Guna Treasury",
+    "display": "130 - GUN - Guna Treasury"
+  },
+  {
+    "code": "140",
+    "short_code": "GWL",
+    "name": "Gwalior Gorkhi Treasury",
+    "display": "140 - GWL - Gwalior Gorkhi Treasury"
+  },
+  {
+    "code": "141",
+    "short_code": "MML",
+    "name": "Motimahal Gwalior Treasury",
+    "display": "141 - MML - Motimahal Gwalior Treasury"
+  },
+  {
+    "code": "150",
+    "short_code": "HAR",
+    "name": "Harda Treasury",
+    "display": "150 - HAR - Harda Treasury"
+  },
+  {
+    "code": "160",
+    "short_code": "HOS",
+    "name": "Hoshangabad Treasury",
+    "display": "160 - HOS - Hoshangabad Treasury"
+  },
+  {
+    "code": "170",
+    "short_code": "IND",
+    "name": "Indore District Treasury",
+    "display": "170 - IND - Indore District Treasury"
+  },
+  {
+    "code": "171",
+    "short_code": "INC",
+    "name": "Indore City Treasury",
+    "display": "171 - INC - Indore City Treasury"
+  },
+  {
+    "code": "180",
+    "short_code": "JBP",
+    "name": "Jabalpur District Treasury",
+    "display": "180 - JBP - Jabalpur District Treasury"
+  },
+  {
+    "code": "181",
+    "short_code": "JBP",
+    "name": "Jabalpur City Treasury",
+    "display": "181 - JBP - Jabalpur City Treasury"
+  },
+  {
+    "code": "190",
+    "short_code": "JHA",
+    "name": "Jhabua Treasury",
+    "display": "190 - JHA - Jhabua Treasury"
+  },
+  {
+    "code": "200",
+    "short_code": "KAT",
+    "name": "Katni Treasury",
+    "display": "200 - KAT - Katni Treasury"
+  },
+  {
+    "code": "210",
+    "short_code": "KHA",
+    "name": "Khandva Treasury",
+    "display": "210 - KHA - Khandva Treasury"
+  },
+  {
+    "code": "220",
+    "short_code": "KAR",
+    "name": "Khargaun Treasury",
+    "display": "220 - KAR - Khargaun Treasury"
+  },
+  {
+    "code": "230",
+    "short_code": "MAN",
+    "name": "Mandla Treasury",
+    "display": "230 - MAN - Mandla Treasury"
+  },
+  {
+    "code": "240",
+    "short_code": "MND",
+    "name": "Mandsaur Treasury",
+    "display": "240 - MND - Mandsaur Treasury"
+  },
+  {
+    "code": "250",
+    "short_code": "MOE",
+    "name": "Morena Treasury",
+    "display": "250 - MOE - Morena Treasury"
+  },
+  {
+    "code": "260",
+    "short_code": "NAR",
+    "name": "Narsinghpur Treasury",
+    "display": "260 - NAR - Narsinghpur Treasury"
+  },
+  {
+    "code": "270",
+    "short_code": "NEE",
+    "name": "Neemuch District Treasury",
+    "display": "270 - NEE - Neemuch District Treasury"
+  },
+  {
+    "code": "280",
+    "short_code": "PAN",
+    "name": "Panna Treasury",
+    "display": "280 - PAN - Panna Treasury"
+  },
+  {
+    "code": "290",
+    "short_code": "RIS",
+    "name": "Raisen Treasury",
+    "display": "290 - RIS - Raisen Treasury"
+  },
+  {
+    "code": "300",
+    "short_code": "RAJ",
+    "name": "Rajgarh Treasury",
+    "display": "300 - RAJ - Rajgarh Treasury"
+  },
+  {
+    "code": "310",
+    "short_code": "RAT",
+    "name": "Ratlam Treasury",
+    "display": "310 - RAT - Ratlam Treasury"
+  },
+  {
+    "code": "320",
+    "short_code": "REW",
+    "name": "Rewa Treasury",
+    "display": "320 - REW - Rewa Treasury"
+  },
+  {
+    "code": "330",
+    "short_code": "SAG",
+    "name": "Sagar Treasury",
+    "display": "330 - SAG - Sagar Treasury"
+  },
+  {
+    "code": "340",
+    "short_code": "SAT",
+    "name": "Satna Treasury",
+    "display": "340 - SAT - Satna Treasury"
+  },
+  {
+    "code": "350",
+    "short_code": "SEH",
+    "name": "Sehore Treasury",
+    "display": "350 - SEH - Sehore Treasury"
+  },
+  {
+    "code": "360",
+    "short_code": "SEO",
+    "name": "Seoni Treasury",
+    "display": "360 - SEO - Seoni Treasury"
+  },
+  {
+    "code": "370",
+    "short_code": "SHA",
+    "name": "Shahdol Treasury",
+    "display": "370 - SHA - Shahdol Treasury"
+  },
+  {
+    "code": "380",
+    "short_code": "SAJ",
+    "name": "Shajapur Treasury",
+    "display": "380 - SAJ - Shajapur Treasury"
+  },
+  {
+    "code": "390",
+    "short_code": "SHI",
+    "name": "Shivpuri Treasury",
+    "display": "390 - SHI - Shivpuri Treasury"
+  },
+  {
+    "code": "400",
+    "short_code": "SHE",
+    "name": "Sheopur Treasury",
+    "display": "400 - SHE - Sheopur Treasury"
+  },
+  {
+    "code": "410",
+    "short_code": "SID",
+    "name": "Seedhi Treasury",
+    "display": "410 - SID - Seedhi Treasury"
+  },
+  {
+    "code": "420",
+    "short_code": "TIK",
+    "name": "Tikamgarh Treasury",
+    "display": "420 - TIK - Tikamgarh Treasury"
+  },
+  {
+    "code": "430",
+    "short_code": "UJJ",
+    "name": "Ujjain Treasury",
+    "display": "430 - UJJ - Ujjain Treasury"
+  },
+  {
+    "code": "440",
+    "short_code": "UMA",
+    "name": "Umaria Treasury",
+    "display": "440 - UMA - Umaria Treasury"
+  },
+  {
+    "code": "450",
+    "short_code": "VID",
+    "name": "Vidisha Treasury",
+    "display": "450 - VID - Vidisha Treasury"
+  },
+  {
+    "code": "460",
+    "short_code": "ANU",
+    "name": "Anupur Treasury",
+    "display": "460 - ANU - Anupur Treasury"
+  },
+  {
+    "code": "470",
+    "short_code": "ASH",
+    "name": "Ashoknagar Treasury",
+    "display": "470 - ASH - Ashoknagar Treasury"
+  },
+  {
+    "code": "480",
+    "short_code": "BUR",
+    "name": "Burhanpur Treasury",
+    "display": "480 - BUR - Burhanpur Treasury"
+  },
+  {
+    "code": "490",
+    "short_code": "ALI",
+    "name": "Alirajpur Treasury",
+    "display": "490 - ALI - Alirajpur Treasury"
+  },
+  {
+    "code": "500",
+    "short_code": "SNG",
+    "name": "Singrauli Treasury",
+    "display": "500 - SNG - Singrauli Treasury"
+  },
+  {
+    "code": "510",
+    "short_code": "AGR",
+    "name": "Agar Malwa Treasury",
+    "display": "510 - AGR - Agar Malwa Treasury"
+  },
+  {
+    "code": "520",
+    "short_code": "NIW",
+    "name": "District Treasury Office Niwari",
+    "display": "520 - NIW - District Treasury Office Niwari"
+  }
+]

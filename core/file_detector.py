@@ -19,13 +19,11 @@ class SmartFileIdentifier:
     TRY_HEADS = {"8658", "0028", "0216", "0043", "0029"}
 
     @classmethod
-    def scan_folder(cls, folder_path, check_parent_for_compay=True):
+    def scan_folder(cls, folder_path, treasury_code=None, month=None, year=None, check_parent_for_compay=True):
         """
         Scans folder_path and identifies file_1 through file_6.
-        Returns:
-            identified: dict of {file_id: absolute_path}
-            logs: list of audit strings describing how each file was identified
-            unmatched: list of files that were not matched to any role
+        Optionally filters/prioritizes by treasury_code (e.g. '052'/'VAL'),
+        month (e.g. '04'/'April'), and year (e.g. '2025').
         """
         if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
             return {}, [f"Directory not found: {folder_path}"], []
@@ -47,9 +45,71 @@ class SmartFileIdentifier:
                     if ext in ['.xls', '.xlsx', '.csv', '.txt'] and "compay" in fn.lower():
                         candidates.append((fn, os.path.join(parent_dir, fn)))
 
+        # Month keywords helper
+        MONTH_MAP = {
+            '1': ['01', 'jan', 'january'], '01': ['01', 'jan', 'january'],
+            '2': ['02', 'feb', 'february'], '02': ['02', 'feb', 'february'],
+            '3': ['03', 'mar', 'march'], '03': ['03', 'mar', 'march'],
+            '4': ['04', 'apr', 'april'], '04': ['04', 'apr', 'april'],
+            '5': ['05', 'may'], '05': ['05', 'may'],
+            '6': ['06', 'jun', 'june'], '06': ['06', 'jun', 'june'],
+            '7': ['07', 'jul', 'july'], '07': ['07', 'jul', 'july'],
+            '8': ['08', 'aug', 'august'], '08': ['08', 'aug', 'august'],
+            '9': ['09', 'sep', 'sept', 'september'], '09': ['09', 'sep', 'sept', 'september'],
+            '10': ['10', 'oct', 'october'],
+            '11': ['11', 'nov', 'november'],
+            '12': ['12', 'dec', 'december']
+        }
+        month_tokens = []
+        if month:
+            m_clean = str(month).strip().lower()
+            month_tokens = MONTH_MAP.get(m_clean, [m_clean])
+
+        year_tokens = []
+        if year:
+            y_str = str(year).strip()
+            year_tokens = [y_str]
+            if len(y_str) == 4:
+                year_tokens.append(y_str[2:]) # e.g. '25' for '2025'
+
+        try_tokens = []
+        if treasury_code:
+            t_clean = str(treasury_code).strip().lower()
+            try_tokens = [t_clean]
+            if t_clean == '052' or t_clean == 'val':
+                try_tokens.extend(['052', 'val', 'vallabh'])
+            elif t_clean == '051' or t_clean == 'vin':
+                try_tokens.extend(['051', 'vin', 'vindhyachal'])
+            elif t_clean == '050' or t_clean == 'bpl':
+                try_tokens.extend(['050', 'bpl', 'bhopal'])
+
+        def compute_candidate_score(filename, full_path):
+            haystack = (filename + " " + full_path).lower()
+            score = 0
+            if month_tokens:
+                if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in month_tokens):
+                    score += 20
+                elif any(tok in haystack for tok in month_tokens):
+                    score += 10
+            if year_tokens:
+                if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in year_tokens):
+                    score += 20
+                elif any(tok in haystack for tok in year_tokens):
+                    score += 10
+            if try_tokens:
+                if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in try_tokens):
+                    score += 20
+                elif any(tok in haystack for tok in try_tokens):
+                    score += 10
+            return score
+
+        # Sort candidates so the ones best matching the requested Treasury/Month/Year come first
+        candidates_scored = [(compute_candidate_score(fn, fp), fn, fp) for fn, fp in candidates]
+        candidates_scored.sort(key=lambda x: x[0], reverse=True)
+        remaining = [(fn, fp) for _, fn, fp in candidates_scored]
+
         identified = {}
         logs = []
-        remaining = list(candidates)
 
         # -------------------------------------------------------------
         # Pass 1: Filename Pattern Matching (Fast Path)
