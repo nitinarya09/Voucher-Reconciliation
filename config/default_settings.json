@@ -31,7 +31,7 @@
   "default_column_mappings": {
     "file_1": {
       "file_type": "ifmis_file_1",
-      "label": "IFMIS Bill Master (Gross, Net & Deductions)",
+      "label": "Voucher Details - File 01 (Gross, Net & Deductions)",
       "has_header": false,
       "delimiter": ",",
       "columns": {
@@ -49,7 +49,7 @@
     },
     "file_2": {
       "file_type": "ifmis_file_2",
-      "label": "IFMIS Gross Expenditure (Detailed Classification)",
+      "label": "Voucher Detail - Details Headwise - File 02 (Detailed Classification)",
       "has_header": false,
       "delimiter": ",",
       "columns": {
@@ -69,7 +69,7 @@
     },
     "file_3": {
       "file_type": "ifmis_file_3",
-      "label": "AG Deductions Schedule (GPF 8009, 0070, 7610)",
+      "label": "AG Deduction - File 03 (GPF 8009, 0070, 7610)",
       "has_header": false,
       "delimiter": ",",
       "columns": {
@@ -83,7 +83,7 @@
     },
     "file_4": {
       "file_type": "ifmis_file_4",
-      "label": "Treasury Deductions Schedule (TDS 8658, PT 0028, GIS 0216)",
+      "label": "NON AG Deduction - File 04 (TDS 8658, PT 0028, GIS 0216)",
       "has_header": false,
       "delimiter": ",",
       "columns": {
@@ -97,7 +97,7 @@
     },
     "file_5": {
       "file_type": "ifmis_file_5",
-      "label": "Treasury Net SOP (Schedule of Payments)",
+      "label": "Voucher Summary - File 05 (Net SOP Payments)",
       "has_header": false,
       "delimiter": ",",
       "columns": {
@@ -112,7 +112,7 @@
     },
     "file_6": {
       "file_type": "vlc_compay_file_6",
-      "label": "VLC COMPAY Posted Vouchers",
+      "label": "VLC COMPAY - File 06 (Posted Vouchers & Transfer Entries)",
       "has_header": true,
       "delimiter": "\t",
       "columns": {

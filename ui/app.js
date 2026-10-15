@@ -20,12 +20,12 @@ let isBridgeInitialized = false;
 
 // File configurations
 const fileCardsMeta = [
-  { id: 'file_1', label: 'IFMIS Bill Master (Gross, Net & Deductions)', source: 'IFMIS Portal', desc: 'Voucher bill master for gross, net bank payment, and deduction consistency' },
-  { id: 'file_2', label: 'IFMIS Gross Expenditure (Detailed Classification)', source: 'IFMIS Portal', desc: 'Detailed voucher classification expenditure lines for primary gross reconciliation' },
-  { id: 'file_3', label: 'AG Deductions Schedule (GPF 8009, Recoveries 0070, Loans 7610)', source: 'IFMIS Portal', desc: 'Itemized AG schedule deductions compiled by Accountant General' },
-  { id: 'file_4', label: 'Treasury Deductions Schedule (TDS 8658, PT 0028, GIS 0216)', source: 'IFMIS Portal', desc: 'Itemized Treasury deductions retained at treasury level' },
-  { id: 'file_5', label: 'Treasury Net SOP (Schedule of Payments)', source: 'IFMIS Portal', desc: 'Treasury electronic Schedule of Payments (SOP) net disbursement vouchers' },
-  { id: 'file_6', label: 'VLC COMPAY Posted Vouchers', source: 'VLC Database', desc: 'Reference dataset of compiled voucher gross amounts and transfer entries from AG' }
+  { id: 'file_1', label: 'Voucher Details (File 01)', source: 'IFMIS Portal', desc: 'Bill-level master vouchers containing Gross, Net, AG Deductions, and Treasury Deductions' },
+  { id: 'file_2', label: 'Voucher Detail - Details Headwise (File 02)', source: 'IFMIS Portal', desc: '15-digit budget classification expenditure lines (MH-SM-MI-SH-DH-SD-VC) for primary Gross tally' },
+  { id: 'file_3', label: 'AG Deduction (File 03)', source: 'IFMIS Portal', desc: 'Itemized deductions booked to AG schedules (GPF 8009, Recoveries 0070, Loans 7610)' },
+  { id: 'file_4', label: 'NON AG Deduction (File 04)', source: 'IFMIS Portal', desc: 'Itemized Treasury-level deductions retained in State accounts (TDS 8658, PT 0028, GIS 0216)' },
+  { id: 'file_5', label: 'Voucher Summary (File 05)', source: 'IFMIS Portal', desc: 'Summary Schedule of Payments (SOP) containing net bank disbursement vouchers' },
+  { id: 'file_6', label: 'VLC COMPAY (File 06)', source: 'VLC Database', desc: 'Accountant General compilation posted vouchers and journal transfer entries' }
 ];
 
 let fileStates = {
@@ -468,12 +468,12 @@ function loadDefaultFiles() {
   } else {
     // Pure Web Mode (GitHub Pages)
     fileStates = {
-      file_1: { path: 'vallabh bhawan/1_0521020253sop.txt (Bill Master)', loaded: true, records: 7268, size: 667595 },
-      file_2: { path: 'vallabh bhawan/2_0521020253sop.txt (Detailed Gross)', loaded: true, records: 10471, size: 685345 },
-      file_3: { path: 'vallabh bhawan/3_0521020253sop.txt (AG Deductions)', loaded: true, records: 735, size: 44142 },
-      file_4: { path: 'vallabh bhawan/4_0521020253sop.txt (Try Deductions)', loaded: true, records: 6210, size: 360634 },
-      file_5: { path: 'vallabh bhawan/0521020253sop.txt (Treasury SOP Net)', loaded: true, records: 7268, size: 394680 },
-      file_6: { path: 'COMPAY_DATA_VAL_10_2025.XLS (VLC COMPAY)', loaded: true, records: 10805, size: 1328618 }
+      file_1: { path: 'Voucher Details - file 01.txt', loaded: true, records: 7268, size: 667595 },
+      file_2: { path: 'Voucher Detail - Details Headwise - file 02.txt', loaded: true, records: 10471, size: 685345 },
+      file_3: { path: 'AG Deduction - file 03.txt', loaded: true, records: 735, size: 44142 },
+      file_4: { path: 'NON AG Deduction - file 04.txt', loaded: true, records: 6210, size: 360634 },
+      file_5: { path: 'Voucher Summary - file 05.txt', loaded: true, records: 7268, size: 394680 },
+      file_6: { path: 'VLC COMPAY - file 06.XLS', loaded: true, records: 10805, size: 1328618 }
     };
     renderFileCards();
     if (typeof BASELINE_DATA !== 'undefined' && BASELINE_DATA) {
@@ -735,12 +735,12 @@ function handleClientFileList(fileList) {
     const lfn = file.name.toLowerCase();
 
     // 1. Filename heuristic matching
-    if (lfn.includes("compay") || lfn.includes("vlc")) return "file_6";
-    if (/^1[_\.]|bill_?master|gross_?net|file_?1\b/i.test(lfn)) return "file_1";
-    if (/^2[_\.]|gross_?exp|detailed|classification|file_?2\b/i.test(lfn)) return "file_2";
-    if (/^3[_\.]|ag_?ded|gpf|file_?3\b/i.test(lfn)) return "file_3";
-    if (/^4[_\.]|try_?ded|non_?ag|treasury_?ded|tds|file_?4\b/i.test(lfn)) return "file_4";
-    if (/^5[_\.]|net_?sop|netsop|file_?5\b/i.test(lfn) || (lfn.endsWith("sop.txt") && !/^[1234][_\.]/i.test(lfn))) return "file_5";
+    if (lfn.includes("compay") || lfn.includes("vlc") || /(^0?6[_\s\.-]|file[_\s-]?0?6\b)/i.test(lfn)) return "file_6";
+    if (/details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b/i.test(lfn)) return "file_2";
+    if (/voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b/i.test(lfn)) return "file_1";
+    if (/non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b/i.test(lfn)) return "file_4";
+    if (/ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b/i.test(lfn)) return "file_3";
+    if (/voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b/i.test(lfn) || (lfn.endsWith("sop.txt") && !/^[1234][_\.]/i.test(lfn))) return "file_5";
 
     // 2. Header and content structural inspection
     if (!lines || lines.length === 0) return null;

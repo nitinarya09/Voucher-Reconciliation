@@ -33,25 +33,25 @@
 
       <div class="nav-section-title">Reconciliation & Checks</div>
       <button class="nav-item" onclick="navigate('gross-recon')">
-        <span>⚖️</span> Gross Recon (File 2 vs File 6)
+        <span>⚖️</span> Gross Recon (File 02 vs File 06)
       </button>
       <button class="nav-item" onclick="navigate('classification-tally')">
-        <span>🏷️</span> Classification Tally (File 2 vs File 6)
+        <span>🏷️</span> Classification Tally (File 02 vs File 06)
       </button>
       <button class="nav-item" onclick="navigate('refunds')">
         <span>💸</span> Refunds & Deduct-Exp Register
       </button>
       <button class="nav-item" onclick="navigate('gross-net-val')">
-        <span>➕</span> Gross–Net–Deductions (File 1 Master)
+        <span>➕</span> Voucher Details: Gross–Net (File 01)
       </button>
       <button class="nav-item" onclick="navigate('net-recon')">
-        <span>💳</span> Net Recon (File 1 vs File 5 Net SOP)
+        <span>💳</span> Net Recon (File 01 vs File 05)
       </button>
       <button class="nav-item" onclick="navigate('ag-ded')">
-        <span>📑</span> AG Deductions (File 3 vs File 1 & 6)
+        <span>📑</span> AG Deduction (File 03 vs 01 & 06)
       </button>
       <button class="nav-item" onclick="navigate('non-ag-ded')">
-        <span>📑</span> Treasury Deductions (File 4 vs File 1)
+        <span>📑</span> NON AG Deduction (File 04 vs 01)
       </button>
       <button class="nav-item" onclick="navigate('cross-file')">
         <span>🔍</span> Statutory Consistency (All 6 Files)
@@ -271,12 +271,12 @@
       </div>
     </div>
 
-    <!-- SECTION 3: Gross Amount Reconciliation (File 2 vs File 6) -->
+    <!-- SECTION 3: Gross Amount Reconciliation (File 02 vs File 06) -->
     <div id="pane-gross-recon" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span>⚖️ Primary Gross Amount Reconciliation (File 2: IFMIS Gross vs. File 6: VLC COMPAY)</span>
+            <span>⚖️ Primary Gross Amount Reconciliation (Voucher Detail - Details Headwise [File 02] vs. VLC COMPAY [File 06])</span>
             <span class="badge badge-info" id="gross-recon-badge">0 Vouchers</span>
           </div>
           <div style="display: flex; gap: 8px;">
@@ -295,9 +295,9 @@
         <!-- Scope & Reconciliation Mapping Callout -->
         <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
           <strong>Reconciling:</strong> 
-          <span class="badge badge-info">File 2: IFMIS Detailed Gross Expenditure</span> 
+          <span class="badge badge-info">File 02: Voucher Detail - Details Headwise</span> 
           with 
-          <span class="badge badge-success">File 6: VLC COMPAY Posted Vouchers (Reference)</span><br>
+          <span class="badge badge-success">File 06: VLC COMPAY (Reference Dataset)</span><br>
           <span style="color: var(--text-muted);">
             • <strong>Comparison Formula:</strong> <code>Gross Diff = File 2 Passed Gross − File 6 COMPAY Posted Gross</code>.<br>
             • <strong>Short Form Definition:</strong> <strong>PT = Professional Tax</strong> (deducted under Major Head <code>0028</code>). When PT or departmental recoveries (MH <code>0070</code>) are netted from gross expenditure in AG compilation, the voucher matches after netting adjustment.
@@ -527,23 +527,23 @@
       </div>
     </div>
 
-    <!-- SECTION 4: Gross–Net–Deductions Validation (IFMIS Bill Master) -->
+    <!-- SECTION 4: Gross–Net–Deductions Validation (Voucher Details) -->
     <div id="pane-gross-net-val" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>➕ Gross = Net + Deductions Arithmetic Validation (File 1: IFMIS Bill Master)</span>
+          <span>➕ Gross = Net + Deductions Arithmetic Validation (Voucher Details [File 01])</span>
           <button class="btn-success btn-sm" onclick="triggerExport('excel', 'val_f1')">
-            <span>📊</span> Export Bill Master Validation (Excel)
+            <span>📊</span> Export Voucher Details Validation (Excel)
           </button>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
         <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
           <strong>Validation Scope:</strong> 
-          <span class="badge badge-info">File 1: IFMIS Bill Master</span> (Internal Mathematical Integrity)<br>
+          <span class="badge badge-info">File 01: Voucher Details</span> (Internal Mathematical Integrity)<br>
           <span style="color: var(--text-muted);">
-            • <strong>Statutory Identity:</strong> <code>File 1 Gross Amount (Col 13) − Total Deductions (Col 15) = File 1 Net Amount (Col 14)</code>.<br>
-            • <strong>Cross-Validation:</strong> Verifies that total deductions equal <code>File 3 (AG Deductions) + File 4 (Treasury Deductions)</code>.
+            • <strong>Statutory Identity:</strong> <code>File 01 Gross Amount (Col 13) − Total Deductions (Col 15) = File 01 Net Amount (Col 14)</code>.<br>
+            • <strong>Cross-Validation:</strong> Verifies that total deductions equal <code>File 03 (AG Deduction) + File 04 (NON AG Deduction)</code>.
           </span>
         </div>
 
@@ -554,10 +554,10 @@
                 <th class="center-col">MHCD</th>
                 <th class="center-col">Vou No</th>
                 <th>DDO Code</th>
-                <th class="num-col">File 1: Gross (₹)</th>
-                <th class="num-col">File 3: AG Ded (₹)</th>
-                <th class="num-col">File 4: Try Ded (₹)</th>
-                <th class="num-col">File 1: Net Amount (₹)</th>
+                <th class="num-col">File 01: Gross (₹)</th>
+                <th class="num-col">File 03: AG Ded (₹)</th>
+                <th class="num-col">File 04: NON AG Ded (₹)</th>
+                <th class="num-col">File 01: Net Amount (₹)</th>
                 <th class="num-col">Arithmetic Diff (₹)</th>
                 <th class="center-col">Validation Status</th>
               </tr>
@@ -570,11 +570,11 @@
       </div>
     </div>
 
-    <!-- SECTION 5: Net Amount Reconciliation (IFMIS Bill Master vs Treasury Net SOP) -->
+    <!-- SECTION 5: Net Amount Reconciliation (Voucher Details vs Voucher Summary) -->
     <div id="pane-net-recon" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>💳 Net Amount Reconciliation (File 1: Bill Master Net vs. File 5: Treasury Net SOP)</span>
+          <span>💳 Net Amount Reconciliation (Voucher Details [File 01] vs. Voucher Summary [File 05])</span>
           <button class="btn-success btn-sm" onclick="triggerExport('excel', 'net_recon')">
             <span>📊</span> Export Net Recon (Excel)
           </button>
@@ -583,11 +583,11 @@
         <!-- Scope & Reconciliation Mapping Callout -->
         <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
           <strong>Reconciling:</strong> 
-          <span class="badge badge-info">File 1: IFMIS Bill Master Net</span> 
+          <span class="badge badge-info">File 01: Voucher Details Net</span> 
           with 
-          <span class="badge badge-success">File 5: Treasury Net SOP (Schedule of Payments)</span><br>
+          <span class="badge badge-success">File 05: Voucher Summary (Net SOP)</span><br>
           <span style="color: var(--text-muted);">
-            • <strong>Comparison Formula:</strong> <code>Net Diff = File 1 Bill Net Passed − File 5 Treasury SOP Disbursed Net</code>.<br>
+            • <strong>Comparison Formula:</strong> <code>Net Diff = File 01 Net Passed − File 05 Disbursed Net</code>.<br>
             • <strong>Audit Objective:</strong> Reconciles authorized net payable amounts against actual electronic bank disbursement records.
           </span>
         </div>
@@ -599,8 +599,8 @@
                 <th class="center-col">MHCD</th>
                 <th class="center-col">Vou No</th>
                 <th>DDO Code</th>
-                <th class="num-col">File 1: Bill Net (₹)</th>
-                <th class="num-col">File 5: Net SOP (₹)</th>
+                <th class="num-col">File 01: Bill Net (₹)</th>
+                <th class="num-col">File 05: Net SOP (₹)</th>
                 <th class="num-col">Net Diff (₹)</th>
                 <th class="center-col">Status</th>
               </tr>
@@ -613,11 +613,11 @@
       </div>
     </div>
 
-    <!-- SECTION 6: AG Deduction Analysis (AG Deductions Schedule) -->
+    <!-- SECTION 6: AG Deduction Analysis (AG Deduction Schedule) -->
     <div id="pane-ag-ded" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>📑 AG Deductions Analysis (File 3 vs. File 1 Bill Master & File 6 COMPAY)</span>
+          <span>📑 AG Deductions Analysis (AG Deduction [File 03] vs. Voucher Details [File 01] & VLC COMPAY [File 06])</span>
           <button class="btn-success btn-sm" onclick="triggerExport('excel', 'ag_ded')">
             <span>📊</span> Export AG Deductions (Excel)
           </button>
@@ -626,10 +626,10 @@
         <!-- Scope & Reconciliation Mapping Callout -->
         <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
           <strong>Reconciling:</strong> 
-          <span class="badge badge-info">File 3: AG Deductions Schedule</span> 
+          <span class="badge badge-info">File 03: AG Deduction</span> 
           with 
-          <span class="badge badge-info">File 1: Bill Master AG Ded</span> and 
-          <span class="badge badge-success">File 6: VLC COMPAY Credit Accounts</span><br>
+          <span class="badge badge-info">File 01: Voucher Details AG Ded</span> and 
+          <span class="badge badge-success">File 06: VLC COMPAY Credit Accounts</span><br>
           <span style="color: var(--text-muted);">
             • <strong>Deduction Heads:</strong> <strong>GPF</strong> (General Provident Fund MH <code>8009</code>), <strong>Recoveries</strong> (MH <code>0070</code>), and <strong>Loans / Advances</strong> (MH <code>7610</code> / <code>6075</code>).<br>
             • <strong>Accounting Treatment:</strong> AG compiles GPF deductions as credit receipts under Public Account MH 8009.
@@ -644,8 +644,8 @@
                 <th class="center-col">Vou No</th>
                 <th class="center-col">Deduction MHCD</th>
                 <th>Deduction Head Description</th>
-                <th class="num-col">File 3: Ded Amount (₹)</th>
-                <th>Accounting Treatment in File 6 (COMPAY)</th>
+                <th class="num-col">File 03: Ded Amount (₹)</th>
+                <th>Accounting Treatment in File 06 (COMPAY)</th>
               </tr>
             </thead>
             <tbody id="ag-ded-table-body">
@@ -656,22 +656,22 @@
       </div>
     </div>
 
-    <!-- SECTION 7: Treasury Deduction Analysis (Treasury Deductions Schedule) -->
+    <!-- SECTION 7: NON AG Deduction Analysis (Treasury Deductions Schedule) -->
     <div id="pane-non-ag-ded" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>📑 Treasury Deductions Analysis (File 4 vs. File 1 Bill Master)</span>
+          <span>📑 NON AG Deductions Analysis (NON AG Deduction [File 04] vs. Voucher Details [File 01])</span>
           <button class="btn-success btn-sm" onclick="triggerExport('excel', 'non_ag_ded')">
-            <span>📊</span> Export Treasury Deductions (Excel)
+            <span>📊</span> Export NON AG Deductions (Excel)
           </button>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
         <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
           <strong>Reconciling:</strong> 
-          <span class="badge badge-info">File 4: Treasury / Non-AG Deductions Schedule</span> 
+          <span class="badge badge-info">File 04: NON AG Deduction</span> 
           with 
-          <span class="badge badge-info">File 1: Bill Master Treasury Deductions</span><br>
+          <span class="badge badge-info">File 01: Voucher Details Treasury Deductions</span><br>
           <span style="color: var(--text-muted);">
             • <strong>Deduction Heads & Short Forms:</strong><br>
             &nbsp;&nbsp;– <strong>TDS:</strong> Tax Deducted at Source / Income Tax (Major Head <code>8658</code> Suspense).<br>
@@ -688,7 +688,7 @@
                 <th class="center-col">Vou No</th>
                 <th class="center-col">Deduction MHCD</th>
                 <th>Deduction Description</th>
-                <th class="num-col">File 4: Ded Amount (₹)</th>
+                <th class="num-col">File 04: Ded Amount (₹)</th>
                 <th>Treasury Handling</th>
               </tr>
             </thead>
@@ -956,12 +956,12 @@
             <div style="display: flex; gap: 8px;">
               <select id="mapping-file-selector" class="search-box" style="min-width: 260px;" onchange="onMappingFileChange()">
                 <option value="all">All Standard Fields (Global Schema)</option>
-                <option value="file_1">IFMIS Bill Master (File 1)</option>
-                <option value="file_2">IFMIS Gross Expenditure (File 2)</option>
-                <option value="file_3">AG Deductions Schedule (File 3)</option>
-                <option value="file_4">Treasury Deductions Schedule (File 4)</option>
-                <option value="file_5">Treasury Net SOP (File 5)</option>
-                <option value="file_6">VLC COMPAY Posted Vouchers (File 6)</option>
+                <option value="file_1">Voucher Details - File 01 (Gross, Net & Deductions)</option>
+                <option value="file_2">Voucher Detail - Details Headwise - File 02 (Detailed Classification)</option>
+                <option value="file_3">AG Deduction - File 03 (GPF, Recoveries, Loans)</option>
+                <option value="file_4">NON AG Deduction - File 04 (TDS, PT, GIS)</option>
+                <option value="file_5">Voucher Summary - File 05 (Net SOP Payments)</option>
+                <option value="file_6">VLC COMPAY - File 06 (Posted Vouchers & Transfer Entries)</option>
               </select>
               <button class="btn-secondary btn-sm" onclick="resetDefaultMapping()">Reset to Default</button>
             </div>

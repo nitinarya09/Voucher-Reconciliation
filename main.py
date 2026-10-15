@@ -82,20 +82,23 @@ class DesktopReconciliationApi:
             compay_file = os.path.join(APP_DIR, "COMPAY_DATA_VAL_10_2025.XLS")
 
         f_map = {
-            "file_1": os.path.join(vb_folder, "1_0521020253sop.txt"),
-            "file_2": os.path.join(vb_folder, "2_0521020253sop.txt"),
-            "file_3": os.path.join(vb_folder, "3_0521020253sop.txt"),
-            "file_4": os.path.join(vb_folder, "4_0521020253sop.txt"),
-            "file_5": os.path.join(vb_folder, "0521020253sop.txt"),
-            "file_6": compay_file
+            "file_1": [os.path.join(vb_folder, "Voucher Details - file 01.txt"), os.path.join(vb_folder, "1_0521020253sop.txt")],
+            "file_2": [os.path.join(vb_folder, "Voucher Detail - Details Headwise - file 02.txt"), os.path.join(vb_folder, "2_0521020253sop.txt")],
+            "file_3": [os.path.join(vb_folder, "AG Deduction - file 03.txt"), os.path.join(vb_folder, "3_0521020253sop.txt")],
+            "file_4": [os.path.join(vb_folder, "NON AG Deduction - file 04.txt"), os.path.join(vb_folder, "4_0521020253sop.txt")],
+            "file_5": [os.path.join(vb_folder, "Voucher Summary - file 05.txt"), os.path.join(vb_folder, "0521020253sop.txt")],
+            "file_6": [os.path.join(EXE_DIR, "VLC COMPAY - file 06.XLS"), compay_file]
         }
 
-        for fid, p in f_map.items():
-            if os.path.exists(p) and not self._importer.files.get(fid):
-                try:
-                    self._importer.register_file(fid, p)
-                except Exception as ex:
-                    self._logger.log_warning("AUTODETECT", f"Failed to register {fid}: {ex}")
+        for fid, paths in f_map.items():
+            if not self._importer.files.get(fid):
+                for p in paths:
+                    if p and os.path.exists(p):
+                        try:
+                            self._importer.register_file(fid, p)
+                            break
+                        except Exception as ex:
+                            self._logger.log_warning("AUTODETECT", f"Failed to register {fid}: {ex}")
 
     def load_default_files(self):
         self._auto_detect_default_files()

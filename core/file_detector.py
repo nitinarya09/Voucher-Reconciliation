@@ -59,22 +59,22 @@ class SmartFileIdentifier:
             role = None
 
             # File 6: COMPAY / VLC Posted Vouchers
-            if "compay" in lfn or "vlc" in lfn:
+            if "compay" in lfn or "vlc" in lfn or re.search(r'(^0?6[_\s\.-]|file[_\s-]?0?6\b)', lfn):
                 role = "file_6"
-            # File 1: Bill Master / Gross Net Deductions
-            elif re.search(r'(^1[_\.]|bill_?master|gross_?net|file_?1\b)', lfn):
-                role = "file_1"
-            # File 2: Detailed Expenditure Gross Classification
-            elif re.search(r'(^2[_\.]|gross_?exp|detailed|classification|file_?2\b)', lfn):
+            # File 2: Voucher Detail - Details Headwise (checked before File 1 to catch 'headwise')
+            elif re.search(r'(details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b)', lfn):
                 role = "file_2"
-            # File 3: AG Deductions Schedule
-            elif re.search(r'(^3[_\.]|ag_?ded|gpf|file_?3\b)', lfn):
-                role = "file_3"
-            # File 4: Treasury / Non-AG Deductions Schedule
-            elif re.search(r'(^4[_\.]|try_?ded|non_?ag|treasury_?ded|tds|file_?4\b)', lfn):
+            # File 1: Voucher Details
+            elif re.search(r'(voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b)', lfn):
+                role = "file_1"
+            # File 4: NON AG Deduction (checked before AG to catch 'non_ag')
+            elif re.search(r'(non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b)', lfn):
                 role = "file_4"
-            # File 5: Net SOP (Electronic Schedule of Payments)
-            elif re.search(r'(^5[_\.]|net_?sop|netsop|file_?5\b)', lfn) or (lfn.endswith("sop.txt") and not re.match(r'^[1234][_\.]', lfn)):
+            # File 3: AG Deduction
+            elif re.search(r'(ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b)', lfn):
+                role = "file_3"
+            # File 5: Voucher Summary (Net SOP)
+            elif re.search(r'(voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b)', lfn) or (lfn.endswith("sop.txt") and not re.match(r'^[1234][_\.]', lfn)):
                 role = "file_5"
 
             if role and role not in identified:
