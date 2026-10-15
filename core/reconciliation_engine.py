@@ -17,7 +17,10 @@ from core.major_heads import MAJOR_HEAD_TITLES as MH_TITLES, get_major_head_titl
 
 def format_15_digit_head(r):
     """Formats standardized 15-digit budget classification head: MH-SM-MI-SH-DH-SD-VC."""
-    mh = str(r.get('mhcd') or '').strip().zfill(4) if r.get('mhcd') else '0000'
+    sec_m = str(r.get('sec_mhcd') or '').strip()
+    m = str(r.get('mhcd') or '').strip()
+    effective_mh = '8009' if sec_m == '8009' else (m or '0000')
+    mh = effective_mh.zfill(4)
     sm = str(r.get('smcd') or '').strip().zfill(2) if r.get('smcd') else '00'
     mi = str(r.get('micd') or '').strip().zfill(3) if r.get('micd') else '000'
     sh = str(r.get('shcd') or '').strip().zfill(4) if r.get('shcd') else '0000'
@@ -125,6 +128,13 @@ class ComprehensiveReconciliationEngine:
         # Group COMPAY Payments
         cp_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'records': []})
         for r in cp_payments:
+            sec_m = str(r.get('sec_mhcd') or '').strip()
+            m = str(r.get('mhcd') or '').strip()
+            # For comparison of Major Head 8009 with File 2:
+            # Gross payment vouchers have sec_mhcd == '8009'.
+            # Rows where mhcd == '8009' and sec_mhcd != '8009' are GPF deductions from salary bills (File 3).
+            if m == '8009' and sec_m != '8009':
+                continue
             k = self.matcher.build_key(r)
             cp_grp[k]['gross'] += (r.get('gross_amt') or Decimal('0.00'))
             cp_grp[k]['records'].append(r)
@@ -269,7 +279,7 @@ class ComprehensiveReconciliationEngine:
             if abs(diff_g) < 0.01: h_st = "EXACT MATCH"
             elif mh == '4801': h_st = f"MISSING IN SOP (+₹{diff_g:,.2f})"
             elif mh in ['8011', '8342', '8443', '8658'] or (mh.startswith('8') and mh != '8009'): h_st = "UNCOMPILED IN COMPAY"
-            elif mh == '8009': h_st = "GPF DEDUCTIONS BOOKED"
+            elif mh == '8009': h_st = f"GPF VARIANCE (₹{diff_g:,.2f})"
             else: h_st = f"DIFFERENCE (₹{diff_g:,.2f})"
 
             head_wise.append({
@@ -372,11 +382,18 @@ class ComprehensiveReconciliationEngine:
         f6_head_vous = defaultdict(lambda: defaultdict(Decimal))
         if ds6 and ds6.is_loaded:
             for r in cp_payments:
+                sec_m = str(r.get('sec_mhcd') or '').strip()
+                m = str(r.get('mhcd') or '').strip()
+                # For comparison of Major Head 8009 with File 2:
+                # Gross payment lines have sec_mhcd == '8009'.
+                # Records where mhcd == '8009' and sec_mhcd != '8009' are GPF deductions from salary bills (File 3).
+                if m == '8009' and sec_m != '8009':
+                    continue
                 k = format_15_digit_head(r)
                 g = (r.get('gross_amt') or Decimal('0.00'))
                 f6_heads[k]['gross'] += g
                 f6_heads[k]['count'] += 1
-                f6_heads[k]['mhcd'] = str(r.get('mhcd') or '')
+                f6_heads[k]['mhcd'] = '8009' if sec_m == '8009' else m
                 f6_head_vous[k][str(r.get('vou_no') or '')] += g
 
         all_head_keys = sorted(set(f2_heads.keys()) | set(f6_heads.keys()))
@@ -401,13 +418,15 @@ class ComprehensiveReconciliationEngine:
                 if mh == '4801':
                     note = 'Direct Capital power subsidy payment booked by AG via Letter of Credit (omitted from Treasury SOP export)'
                 elif mh == '8009':
-                    note = 'GPF credit compilation record entered under department-specific head by AG VLC'
+                    note = 'GPF subscriber department classification in AG VLC (matches Treasury IFMIS Scheme total 100% at Scheme/Major Head level)'
                 else:
                     note = 'Classification head compiled directly in COMPAY, absent from IFMIS File 2 export'
             elif g6 == 0:
                 st = 'MISSING_IN_COMPAY'
                 if mh in ['8011', '8342', '8658']:
                     note = f'Public Account head {mh} (Employee Insurance / Deposits / Suspense) compiled in separate ledger outside COMPAY payments'
+                elif mh == '8009':
+                    note = 'GPF Scheme booked centrally in Treasury IFMIS under Scheme (0122/0123) with DH/SD 00-000; compiled department-wise in AG VLC'
                 else:
                     note = 'Classification head in IFMIS File 2, omitted from COMPAY compilation'
             else:

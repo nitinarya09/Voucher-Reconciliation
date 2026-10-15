@@ -118,6 +118,7 @@
       "columns": {
         "TRY_CD": "try_cd",
         "MHCD": "mhcd",
+        "SEC_MHCD": "sec_mhcd",
         "SMCD": "smcd",
         "MICD": "micd",
         "SHCD": "shcd",

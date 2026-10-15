@@ -116,7 +116,7 @@ class DataNormalizer:
         warnings = []
 
         # Identifier and Classification fields
-        for id_field in ['try_cd', 'mhcd', 'vou_no', 'ddo_cd', 'token_no', 'ded_mhcd', 'te_no', 'ss_sop', 'sctnd_code', 'bill_no', 'smcd', 'micd', 'shcd', 'dhcd', 'sdcd', 'vc', 'pn', 'refund']:
+        for id_field in ['try_cd', 'mhcd', 'sec_mhcd', 'vou_no', 'ddo_cd', 'token_no', 'ded_mhcd', 'te_no', 'ss_sop', 'sctnd_code', 'bill_no', 'smcd', 'micd', 'shcd', 'dhcd', 'sdcd', 'vc', 'pn', 'refund']:
             raw_v = raw_mapped.get(id_field, "")
             norm[id_field] = cls.normalize_identifier(raw_v)
 

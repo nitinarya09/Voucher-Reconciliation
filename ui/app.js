@@ -1458,16 +1458,17 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
         const ssSop = (f6Idx.SS_SOP !== undefined ? row[f6Idx.SS_SOP] : '') || '';
         const amt = parseFloat(row[f6Idx.AMOUNT] || 0) || 0;
         const isTE = (teNo.trim() !== '') || (ssSop.trim().toUpperCase() === 'TE');
-        const mhcd = (f6Idx.MHCD !== undefined ? row[f6Idx.MHCD] : '') || '';
-        const vouNo = (f6Idx.VOU_NO !== undefined ? row[f6Idx.VOU_NO] : '') || '';
+        const mhcd = ((f6Idx.MHCD !== undefined ? row[f6Idx.MHCD] : '') || '').trim().replace(/\.0$/, '');
+        const secMhcd = ((f6Idx.SEC_MHCD !== undefined ? row[f6Idx.SEC_MHCD] : '') || '').trim().replace(/\.0$/, '');
+        const vouNo = ((f6Idx.VOU_NO !== undefined ? row[f6Idx.VOU_NO] : '') || '').trim().replace(/\.0$/, '');
         const tryCd = (f6Idx.TRY_CD !== undefined ? row[f6Idx.TRY_CD] : '').replace(/^VAL$/i, '052') || '052';
         const ddoCd = (f6Idx.DDO_CD !== undefined ? row[f6Idx.DDO_CD] : '') || '';
         const billDate = (f6Idx.BILL_DATE !== undefined ? row[f6Idx.BILL_DATE] : '') || '';
-        const smcd = (f6Idx.SMCD !== undefined ? row[f6Idx.SMCD] : '') || '';
-        const micd = (f6Idx.MICD !== undefined ? row[f6Idx.MICD] : '') || '';
-        const shcd = (f6Idx.SHCD !== undefined ? row[f6Idx.SHCD] : '') || '';
-        const dhcd = (f6Idx.DHCD !== undefined ? row[f6Idx.DHCD] : '') || '';
-        const sdcd = (f6Idx.SDCD !== undefined ? row[f6Idx.SDCD] : '') || '';
+        const smcd = ((f6Idx.SMCD !== undefined ? row[f6Idx.SMCD] : '') || '').trim().replace(/\.0$/, '');
+        const micd = ((f6Idx.MICD !== undefined ? row[f6Idx.MICD] : '') || '').trim().replace(/\.0$/, '');
+        const shcd = ((f6Idx.SHCD !== undefined ? row[f6Idx.SHCD] : '') || '').trim().replace(/\.0$/, '');
+        const dhcd = ((f6Idx.DHCD !== undefined ? row[f6Idx.DHCD] : '') || '').trim().replace(/\.0$/, '');
+        const sdcd = ((f6Idx.SDCD !== undefined ? row[f6Idx.SDCD] : '') || '').trim().replace(/\.0$/, '');
         const vc = ((f6Idx.VC !== undefined ? row[f6Idx.VC] : '') || 'V').toUpperCase();
         const sctndCode = (f6Idx.SCTND_CODE !== undefined ? row[f6Idx.SCTND_CODE] : '') || '';
 
@@ -1476,7 +1477,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
 
         cpGrandTotal += amt;
         const rec = {
-          try_cd: tryCd, mhcd, vou_no: vouNo, ddo_cd: ddoCd, bill_date: billDate,
+          try_cd: tryCd, mhcd, sec_mhcd: secMhcd, vou_no: vouNo, ddo_cd: ddoCd, bill_date: billDate,
           smcd, micd, shcd, dhcd, sdcd, vc, sctnd_code: sctndCode, te_no: teNo,
           amount: amt
         };
@@ -1488,21 +1489,29 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
           cpPayments.push(rec);
           cpPaymentTotal += amt;
 
-          const vk = `${mhcd}|${vouNo}`;
-          if (!cpVouGrp.has(vk)) {
-            cpVouGrp.set(vk, { gross: 0, count: 0, ddo_cd: ddoCd, bill_date: billDate, try_cd: tryCd });
-          }
-          const cg = cpVouGrp.get(vk);
-          cg.gross += amt;
-          cg.count += 1;
+          // For comparison of Major Head 8009 with File 2:
+          // Gross payments of 8009 have sec_mhcd === '8009'.
+          // Records where mhcd === '8009' but sec_mhcd !== '8009' are GPF deductions from salary bills (File 3).
+          const isDeduction8009 = (mhcd === '8009' && secMhcd !== '8009');
 
-          const head15 = `${mhcd.padStart(4, '0')}-${smcd.padStart(2, '0')}-${micd.padStart(3, '0')}-${shcd.padStart(4, '0')}-${dhcd.padStart(2, '0')}-${sdcd.padStart(3, '0')}-${vc}`;
-          if (!cpHeadGrp.has(head15)) {
-            cpHeadGrp.set(head15, { mhcd, gross: 0, count: 0 });
+          if (!isDeduction8009) {
+            const effectiveMhcd = (secMhcd === '8009') ? '8009' : mhcd;
+            const vk = `${effectiveMhcd}|${vouNo}`;
+            if (!cpVouGrp.has(vk)) {
+              cpVouGrp.set(vk, { gross: 0, count: 0, ddo_cd: ddoCd, bill_date: billDate, try_cd: tryCd });
+            }
+            const cg = cpVouGrp.get(vk);
+            cg.gross += amt;
+            cg.count += 1;
+
+            const head15 = `${effectiveMhcd.padStart(4, '0')}-${smcd.padStart(2, '0')}-${micd.padStart(3, '0')}-${shcd.padStart(4, '0')}-${dhcd.padStart(2, '0')}-${sdcd.padStart(3, '0')}-${vc}`;
+            if (!cpHeadGrp.has(head15)) {
+              cpHeadGrp.set(head15, { mhcd: effectiveMhcd, gross: 0, count: 0 });
+            }
+            const hg = cpHeadGrp.get(head15);
+            hg.gross += amt;
+            hg.count += 1;
           }
-          const hg = cpHeadGrp.get(head15);
-          hg.gross += amt;
-          hg.count += 1;
         }
 
         // Refund analysis
@@ -1841,7 +1850,10 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
 
   // 9. Major Head-Wise Summary
   const allMhs = new Set();
-  cpPayments.forEach(r => allMhs.add(r.mhcd));
+  cpPayments.forEach(r => {
+    if (r.sec_mhcd === '8009') allMhs.add('8009');
+    else if (r.mhcd !== '8009') allMhs.add(r.mhcd);
+  });
   f1Map.forEach(r => allMhs.add(r.mhcd));
   f2VouGrp.forEach((_, k) => allMhs.add(k.split('|')[0]));
   const sortedMhs = Array.from(allMhs).filter(Boolean).sort((a, b) => (parseInt(a, 10) || 99999) - (parseInt(b, 10) || 99999));
@@ -1849,7 +1861,15 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   const headWise = [];
   sortedMhs.forEach(mh => {
     let cpG = 0, f1G = 0, f1Ag = 0, f1Try = 0, f1N = 0, f3Rec = 0;
-    cpPayments.forEach(r => { if (r.mhcd === mh) cpG += r.amount; });
+    cpPayments.forEach(r => {
+      if (mh === '8009') {
+        if ((r.sec_mhcd || r.mhcd) === '8009' && (r.sec_mhcd ? r.sec_mhcd === '8009' : true)) {
+          cpG += r.amount;
+        }
+      } else {
+        if (r.mhcd === mh && r.sec_mhcd !== '8009') cpG += r.amount;
+      }
+    });
     f1Map.forEach(r => {
       if (r.mhcd === mh) {
         f1G += r.gross; f1Ag += r.ag_ded; f1Try += r.try_ded; f1N += r.net;
@@ -1864,7 +1884,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
     if (Math.abs(diffGross) < 0.01) hStatus = "EXACT MATCH";
     else if (mh === '4801') hStatus = `MISSING IN SOP (+₹${diffGross.toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
     else if (['8011', '8342', '8658'].includes(mh)) hStatus = "UNCOMPILED IN COMPAY";
-    else if (mh === '8009') hStatus = "GPF DEDUCTIONS BOOKED";
+    else if (mh === '8009') hStatus = `GPF VARIANCE (₹${diffGross.toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
     else if (Math.abs(diffGross + f3Rec) < 0.01) hStatus = "RECOVERIES NETTED";
     else hStatus = `DIFFERENCE (₹${diffGross.toLocaleString('en-IN', {minimumFractionDigits: 2})})`;
 
@@ -1943,13 +1963,25 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
     let note = "Perfect 15-digit classification match";
     if (d2.count > 0 && d6.count === 0) {
       st = "MISSING_IN_COMPAY";
-      note = "Head present in IFMIS SOP export but absent in COMPAY compilation";
+      if (mh === '8009') {
+        note = "GPF Scheme booked centrally in Treasury IFMIS under Scheme (0122/0123) with DH/SD 00-000; compiled departmental-wise in AG VLC";
+      } else if (['8011', '8342', '8658'].includes(mh)) {
+        note = `Public Account head ${mh} compiled in separate broadsheet outside COMPAY payments`;
+      } else {
+        note = "Head present in IFMIS SOP export but absent in COMPAY compilation";
+      }
     } else if (d2.count === 0 && d6.count > 0) {
       st = "MISSING_IN_IFMIS";
-      note = "Head compiled in COMPAY but absent in IFMIS SOP Detailed file";
+      if (mh === '8009') {
+        note = "GPF subscriber department classification in AG VLC (matches Treasury IFMIS Scheme total 100% at Scheme/Major Head level)";
+      } else if (mh === '4801') {
+        note = "Direct Capital power subsidy payment booked by AG via Letter of Credit (omitted from Treasury SOP export)";
+      } else {
+        note = "Head compiled in COMPAY but absent in IFMIS SOP Detailed file";
+      }
     } else if (Math.abs(diff) >= 0.01) {
       st = "RECLASSIFIED_IN_VLC";
-      note = `Compiled amount differs by ₹${diff.toLocaleString('en-IN', {minimumFractionDigits: 2})} due to accounting reclassification`;
+      note = `Compiled amount differs by ₹${Math.abs(diff).toLocaleString('en-IN', {minimumFractionDigits: 2})} due to accounting reclassification`;
     }
 
     tallyCounts[st] = (tallyCounts[st] || 0) + 1;

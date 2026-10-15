@@ -30,7 +30,8 @@ INTERNAL_FIELDS = {
     "sdcd": {"label": "Sub-Detail / Object Head", "type": "string", "required_for_matching": False},
     "vc": {"label": "Voted / Charged", "type": "string", "required_for_matching": False},
     "pn": {"label": "Plan / Non-Plan", "type": "string", "required_for_matching": False},
-    "refund": {"label": "Refund Flag", "type": "string", "required_for_matching": False}
+    "refund": {"label": "Refund Flag", "type": "string", "required_for_matching": False},
+    "sec_mhcd": {"label": "Section Major Head (SEC_MHCD)", "type": "string", "required_for_matching": False}
 }
 
 class ColumnMapper:
