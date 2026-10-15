@@ -243,52 +243,153 @@ kbd {
   overflow: hidden;
 }
 
-header {
-  min-height: 60px;
+/* App Header (Adaptive 2-Tier Layout for Laptops & Desktops) */
+.app-header {
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 24px;
+  padding: 8px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.header-primary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
-  gap: 16px;
+  width: 100%;
+  gap: 14px;
+  min-height: 34px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 1;
+.header-title-box {
   min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .screen-title {
-  font-size: 1.15rem;
+  font-size: 1.12rem;
   font-weight: 700;
+  color: var(--text-main);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.25;
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-}
-
-.header-badge-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
+.screen-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  line-height: 1.2;
 }
 
 .header-action-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-action-group .btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.header-status-ribbon {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  min-height: 28px;
+}
+
+.header-context-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.header-context-left .badge {
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
   flex-wrap: nowrap;
+}
+
+.header-badge-group .badge {
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments for 1366x768 laptops and smaller */
+@media (max-width: 1366px) {
+  .app-header {
+    padding: 7px 18px;
+    gap: 5px;
+  }
+  .screen-title {
+    font-size: 1.05rem;
+  }
+  .screen-subtitle {
+    font-size: 0.72rem;
+  }
+  .header-action-group .btn-sm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+  }
+  .header-status-ribbon {
+    padding-top: 3px;
+    gap: 8px;
+  }
+  .header-badge-group .badge,
+  .header-context-left .badge {
+    font-size: 0.73rem;
+    padding: 2px 8px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .header-status-ribbon {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .nav-shortcut-btn .btn-label {
+    display: none;
+  }
+  .nav-shortcut-btn {
+    padding: 0 8px !important;
+  }
 }
 
 .content-pane {
@@ -481,6 +582,9 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .badge-success { background-color: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
@@ -1360,32 +1464,37 @@ td.wrap-cell, td:last-child {
 
   <!-- Main Work Container -->
   <div class="app-container">
-    <!-- Top Header -->
-    <header>
-      <div class="header-left">
-        <div>
+    <!-- Top Header (Responsive 2-Tier Layout for Laptops & Desktops) -->
+    <header class="app-header">
+      <!-- Tier 1: Screen Title & Action Controls -->
+      <div class="header-primary-row">
+        <div class="header-title-box">
           <h2 class="screen-title" id="screen-title">Executive Dashboard</h2>
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="screen-subtitle">
+          <div class="screen-subtitle" id="screen-subtitle">
             Consolidated Treasury & VLC Voucher Reconciliation Workbench
           </div>
         </div>
-        <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL) — Oct 2025</span>
+        <div class="header-action-group">
+          <button class="btn-secondary btn-sm nav-shortcut-btn" onclick="navigate('import')" title="Go to Smart Data Ingestion">
+            <span>📂</span> <span class="btn-label">Ingestion</span>
+          </button>
+          <button class="btn-secondary btn-sm nav-shortcut-btn" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
+            <span>📥</span> <span class="btn-label">Export</span>
+          </button>
+          <button class="btn-primary btn-sm header-run-btn" id="btn-quick-run" onclick="runFullReconciliation()" title="Execute Complete Multi-File Reconciliation Pipeline">
+            <span>⚡</span> <span class="btn-label">Run Reconciliation</span>
+          </button>
+        </div>
       </div>
-      <div class="header-right">
+
+      <!-- Tier 2: Real-time Status & Context Ribbon -->
+      <div class="header-status-ribbon">
+        <div class="header-context-left">
+          <span class="badge badge-info" id="treasury-badge">🏛️ Treasury: 052 (VAL) — Oct 2025</span>
+        </div>
         <div class="header-badge-group">
           <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
           <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
-        </div>
-        <div class="header-action-group">
-          <button class="btn-secondary btn-sm" onclick="navigate('import')" title="Go to File Ingestion">
-            <span>📂</span> Ingestion
-          </button>
-          <button class="btn-secondary btn-sm" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
-            <span>📥</span> Export
-          </button>
-          <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
-            <span>⚡</span> Run Reconciliation
-          </button>
         </div>
       </div>
     </header>
@@ -2856,19 +2965,19 @@ function navigate(screenId) {
   }
 
   const titles = {
-    'dashboard': 'Executive Dashboard — Comprehensive Reconciliation Overview',
-    'import': 'Smart Data Ingestion — 6-File Auto-Detection & Fingerprinting',
-    'settings': 'Settings & Configuration — Matching Rules, Column Profiles & Glossary',
-    'gross-recon': 'Primary Gross Amount Reconciliation (File 2: Gross Exp vs. File 6: VLC COMPAY)',
-    'classification-tally': '15-Digit Classification Tally (File 2 Detailed Gross vs. File 6 VLC COMPAY)',
-    'refunds': 'Refund Vouchers & Deduct-Expenditure Register (Negative Entries & Minor Head 900)',
-    'gross-net-val': 'Gross–Net–Deductions Arithmetic Validation (File 1: IFMIS Bill Master)',
-    'net-recon': 'Net Amount Reconciliation (File 1: Bill Master Net vs. File 5: Treasury Net SOP)',
-    'ag-ded': 'AG Deductions Schedule Analysis (File 3 vs. File 1 Bill Master & File 6 COMPAY)',
-    'non-ag-ded': 'Treasury Deductions Schedule Analysis (File 4: TDS, PT, GIS vs. File 1 Bill Master)',
-    'cross-file': 'Statutory Cross-File Consistency Checks (12 Audited Rules Across All 6 Files)',
-    'exceptions': 'Exceptions & Discrepancies Register (Stratified Investigation & Resolution)',
-    'export': 'Multi-Format Audit Export Center (.xlsx, .pdf, .csv, .txt)',
+    'dashboard': 'Executive Dashboard',
+    'import': 'Smart Data Ingestion',
+    'settings': 'Settings & Column Mapping',
+    'gross-recon': 'Primary Gross Amount Reconciliation',
+    'classification-tally': '15-Digit Classification Tally',
+    'refunds': 'Refunds & Deduct-Expenditure Register',
+    'gross-net-val': 'Gross–Net–Deductions Arithmetic Validation',
+    'net-recon': 'Net Amount Disbursement Reconciliation',
+    'ag-ded': 'AG Deductions Schedule Analysis',
+    'non-ag-ded': 'Treasury Deductions Schedule Analysis',
+    'cross-file': '12 Statutory Consistency Rules',
+    'exceptions': 'Exceptions & Discrepancies Register',
+    'export': 'Multi-Format Audit Export Center',
     'history': 'Processing History & Local Audit Logs'
   };
   const titleEl = document.getElementById('screen-title');
@@ -2876,14 +2985,14 @@ function navigate(screenId) {
 
   const subtitles = {
     'dashboard': 'Consolidated Treasury & VLC Voucher Reconciliation Workbench — Macro Balance Parity',
-    'gross-recon': 'Phase 1: Line-by-Line Gross Parity Verification between Treasury Passed and AG Compiled',
-    'classification-tally': 'Phase 2: 15-Digit Headwise (MH-SM-MI-SH-DH-SD-VC) Budget Ledger Audit & Variances',
+    'gross-recon': 'Phase 1: Line-by-Line Gross Parity (File 02 IFMIS Detailed Gross vs. File 06 VLC COMPAY)',
+    'classification-tally': 'Phase 2: 15-Digit Budget Ledger (File 02 Detailed Headwise vs. File 06 VLC COMPAY)',
     'gross-net-val': 'Phase 3: Bill Master Formula Validation (Gross − AG Ded − Try Ded = Net Disbursed)',
     'net-recon': 'Phase 4: Net Disbursement Verification (Bill Master Net vs Bank SOP Disbursement)',
     'ag-ded': 'Phase 5A: Schedule Ledger Deductions Credited to AG Accounts (GPF 8009, 0070, 7610)',
     'non-ag-ded': 'Phase 5B: State Account Deductions Retained in Treasury (TDS 8658, PT 0028, GIS 0216)',
     'refunds': 'Phase 6: Revenue Deduct Refunds (Minor Head 900) and Negative Advance Recoveries',
-    'cross-file': '12 Core Statutory Accounting Rules & Mathematical Parity Checks',
+    'cross-file': '12 Core Statutory Accounting Rules & Mathematical Parity Checks across All 6 Files',
     'exceptions': 'Stratified Discrepancy Register & Actionable Guidance for Treasury Officers',
     'import': 'Smart Hybrid Heuristic & Structural Fingerprinting Ingestion (6 Files)',
     'export': 'Audit-Grade Multi-Format Export Center (.xlsx, .pdf, .csv, .txt)',

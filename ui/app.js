@@ -226,19 +226,19 @@ function navigate(screenId) {
   }
 
   const titles = {
-    'dashboard': 'Executive Dashboard — Comprehensive Reconciliation Overview',
-    'import': 'Smart Data Ingestion — 6-File Auto-Detection & Fingerprinting',
-    'settings': 'Settings & Configuration — Matching Rules, Column Profiles & Glossary',
-    'gross-recon': 'Primary Gross Amount Reconciliation (File 2: Gross Exp vs. File 6: VLC COMPAY)',
-    'classification-tally': '15-Digit Classification Tally (File 2 Detailed Gross vs. File 6 VLC COMPAY)',
-    'refunds': 'Refund Vouchers & Deduct-Expenditure Register (Negative Entries & Minor Head 900)',
-    'gross-net-val': 'Gross–Net–Deductions Arithmetic Validation (File 1: IFMIS Bill Master)',
-    'net-recon': 'Net Amount Reconciliation (File 1: Bill Master Net vs. File 5: Treasury Net SOP)',
-    'ag-ded': 'AG Deductions Schedule Analysis (File 3 vs. File 1 Bill Master & File 6 COMPAY)',
-    'non-ag-ded': 'Treasury Deductions Schedule Analysis (File 4: TDS, PT, GIS vs. File 1 Bill Master)',
-    'cross-file': 'Statutory Cross-File Consistency Checks (12 Audited Rules Across All 6 Files)',
-    'exceptions': 'Exceptions & Discrepancies Register (Stratified Investigation & Resolution)',
-    'export': 'Multi-Format Audit Export Center (.xlsx, .pdf, .csv, .txt)',
+    'dashboard': 'Executive Dashboard',
+    'import': 'Smart Data Ingestion',
+    'settings': 'Settings & Column Mapping',
+    'gross-recon': 'Primary Gross Amount Reconciliation',
+    'classification-tally': '15-Digit Classification Tally',
+    'refunds': 'Refunds & Deduct-Expenditure Register',
+    'gross-net-val': 'Gross–Net–Deductions Arithmetic Validation',
+    'net-recon': 'Net Amount Disbursement Reconciliation',
+    'ag-ded': 'AG Deductions Schedule Analysis',
+    'non-ag-ded': 'Treasury Deductions Schedule Analysis',
+    'cross-file': '12 Statutory Consistency Rules',
+    'exceptions': 'Exceptions & Discrepancies Register',
+    'export': 'Multi-Format Audit Export Center',
     'history': 'Processing History & Local Audit Logs'
   };
   const titleEl = document.getElementById('screen-title');
@@ -246,14 +246,14 @@ function navigate(screenId) {
 
   const subtitles = {
     'dashboard': 'Consolidated Treasury & VLC Voucher Reconciliation Workbench — Macro Balance Parity',
-    'gross-recon': 'Phase 1: Line-by-Line Gross Parity Verification between Treasury Passed and AG Compiled',
-    'classification-tally': 'Phase 2: 15-Digit Headwise (MH-SM-MI-SH-DH-SD-VC) Budget Ledger Audit & Variances',
+    'gross-recon': 'Phase 1: Line-by-Line Gross Parity (File 02 IFMIS Detailed Gross vs. File 06 VLC COMPAY)',
+    'classification-tally': 'Phase 2: 15-Digit Budget Ledger (File 02 Detailed Headwise vs. File 06 VLC COMPAY)',
     'gross-net-val': 'Phase 3: Bill Master Formula Validation (Gross − AG Ded − Try Ded = Net Disbursed)',
     'net-recon': 'Phase 4: Net Disbursement Verification (Bill Master Net vs Bank SOP Disbursement)',
     'ag-ded': 'Phase 5A: Schedule Ledger Deductions Credited to AG Accounts (GPF 8009, 0070, 7610)',
     'non-ag-ded': 'Phase 5B: State Account Deductions Retained in Treasury (TDS 8658, PT 0028, GIS 0216)',
     'refunds': 'Phase 6: Revenue Deduct Refunds (Minor Head 900) and Negative Advance Recoveries',
-    'cross-file': '12 Core Statutory Accounting Rules & Mathematical Parity Checks',
+    'cross-file': '12 Core Statutory Accounting Rules & Mathematical Parity Checks across All 6 Files',
     'exceptions': 'Stratified Discrepancy Register & Actionable Guidance for Treasury Officers',
     'import': 'Smart Hybrid Heuristic & Structural Fingerprinting Ingestion (6 Files)',
     'export': 'Audit-Grade Multi-Format Export Center (.xlsx, .pdf, .csv, .txt)',

@@ -91,32 +91,37 @@
 
   <!-- Main Work Container -->
   <div class="app-container">
-    <!-- Top Header -->
-    <header>
-      <div class="header-left">
-        <div>
+    <!-- Top Header (Responsive 2-Tier Layout for Laptops & Desktops) -->
+    <header class="app-header">
+      <!-- Tier 1: Screen Title & Action Controls -->
+      <div class="header-primary-row">
+        <div class="header-title-box">
           <h2 class="screen-title" id="screen-title">Executive Dashboard</h2>
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="screen-subtitle">
+          <div class="screen-subtitle" id="screen-subtitle">
             Consolidated Treasury & VLC Voucher Reconciliation Workbench
           </div>
         </div>
-        <span class="badge badge-info" id="treasury-badge">Treasury: 052 (VAL) — Oct 2025</span>
+        <div class="header-action-group">
+          <button class="btn-secondary btn-sm nav-shortcut-btn" onclick="navigate('import')" title="Go to Smart Data Ingestion">
+            <span>📂</span> <span class="btn-label">Ingestion</span>
+          </button>
+          <button class="btn-secondary btn-sm nav-shortcut-btn" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
+            <span>📥</span> <span class="btn-label">Export</span>
+          </button>
+          <button class="btn-primary btn-sm header-run-btn" id="btn-quick-run" onclick="runFullReconciliation()" title="Execute Complete Multi-File Reconciliation Pipeline">
+            <span>⚡</span> <span class="btn-label">Run Reconciliation</span>
+          </button>
+        </div>
       </div>
-      <div class="header-right">
+
+      <!-- Tier 2: Real-time Status & Context Ribbon -->
+      <div class="header-status-ribbon">
+        <div class="header-context-left">
+          <span class="badge badge-info" id="treasury-badge">🏛️ Treasury: 052 (VAL) — Oct 2025</span>
+        </div>
         <div class="header-badge-group">
           <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
           <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
-        </div>
-        <div class="header-action-group">
-          <button class="btn-secondary btn-sm" onclick="navigate('import')" title="Go to File Ingestion">
-            <span>📂</span> Ingestion
-          </button>
-          <button class="btn-secondary btn-sm" onclick="navigate('export')" title="Jump to Multi-Format Export Center">
-            <span>📥</span> Export
-          </button>
-          <button class="btn-primary btn-sm" id="btn-quick-run" onclick="runFullReconciliation()">
-            <span>⚡</span> Run Reconciliation
-          </button>
         </div>
       </div>
     </header>

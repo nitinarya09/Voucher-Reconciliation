@@ -235,52 +235,153 @@ kbd {
   overflow: hidden;
 }
 
-header {
-  min-height: 60px;
+/* App Header (Adaptive 2-Tier Layout for Laptops & Desktops) */
+.app-header {
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 24px;
+  padding: 8px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.header-primary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
-  gap: 16px;
+  width: 100%;
+  gap: 14px;
+  min-height: 34px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 1;
+.header-title-box {
   min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .screen-title {
-  font-size: 1.15rem;
+  font-size: 1.12rem;
   font-weight: 700;
+  color: var(--text-main);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.25;
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-}
-
-.header-badge-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
+.screen-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  line-height: 1.2;
 }
 
 .header-action-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-action-group .btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.header-status-ribbon {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  min-height: 28px;
+}
+
+.header-context-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.header-context-left .badge {
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
   flex-wrap: nowrap;
+}
+
+.header-badge-group .badge {
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments for 1366x768 laptops and smaller */
+@media (max-width: 1366px) {
+  .app-header {
+    padding: 7px 18px;
+    gap: 5px;
+  }
+  .screen-title {
+    font-size: 1.05rem;
+  }
+  .screen-subtitle {
+    font-size: 0.72rem;
+  }
+  .header-action-group .btn-sm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+  }
+  .header-status-ribbon {
+    padding-top: 3px;
+    gap: 8px;
+  }
+  .header-badge-group .badge,
+  .header-context-left .badge {
+    font-size: 0.73rem;
+    padding: 2px 8px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .header-status-ribbon {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .nav-shortcut-btn .btn-label {
+    display: none;
+  }
+  .nav-shortcut-btn {
+    padding: 0 8px !important;
+  }
 }
 
 .content-pane {
@@ -473,6 +574,9 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .badge-success { background-color: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
