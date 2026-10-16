@@ -262,6 +262,7 @@ function navigate(screenId) {
   };
   const subEl = document.getElementById('screen-subtitle');
   if (subEl) subEl.textContent = subtitles[targetScreen] || '';
+  syncStickyTableHeaders();
 }
 
 // Switch between subtabs inside the consolidated Settings & Configuration screen
@@ -501,6 +502,8 @@ function onReady() {
   renderFileCards();
   populateColumnMapping();
   setupClientFileHandlers();
+  window.addEventListener('resize', syncStickyTableHeaders);
+  syncStickyTableHeaders();
   setTimeout(function() {
     if (!isBridgeInitialized) {
       initApp();
@@ -3430,6 +3433,22 @@ function populateAllScreens(data) {
         exMissingSopBadge.className = missing4801.length > 0 ? 'badge badge-danger' : 'badge badge-success';
       }
 
+      const exMissingSopTopTotal = document.getElementById('exc-missing-sop-top-total');
+      if (exMissingSopTopTotal) {
+        if (missing4801.length > 0) {
+          exMissingSopTopTotal.innerHTML = `
+            <td class="center-col" style="font-weight: 800; color: var(--danger);">TOTAL</td>
+            <td class="center-col" style="font-weight: 800; color: var(--danger);">${missing4801.length} Vouchers</td>
+            <td style="font-weight: 600;">Direct State Account</td>
+            <td class="center-col">-</td>
+            <td class="num-col" style="font-weight: 800; color: var(--danger); font-size: 0.92rem;">${formatCurrency(tot4801Amt)}</td>
+            <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Book transfer / LC payments directly compiled by AG</td>
+          `;
+        } else {
+          exMissingSopTopTotal.innerHTML = `<td colspan="6" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero capital vouchers omitted from SOP in this accounting period.</td>`;
+        }
+      }
+
       if (missing4801.length > 0) {
         missing4801.forEach(m => {
           const tr = document.createElement('tr');
@@ -3462,6 +3481,29 @@ function populateAllScreens(data) {
         uncompMap[v.mhcd].net += (v.file1_net || 0);
       });
       const uncompKeys = Object.keys(uncompMap);
+
+      const exUncompTopTotal = document.getElementById('exc-uncompiled-top-total');
+      if (exUncompTopTotal) {
+        let totUncompCount = 0, totUncompGross = 0, totUncompNet = 0;
+        uncompKeys.forEach(mh => {
+          totUncompCount += uncompMap[mh].count;
+          totUncompGross += uncompMap[mh].gross;
+          totUncompNet += uncompMap[mh].net;
+        });
+        if (uncompKeys.length > 0) {
+          exUncompTopTotal.innerHTML = `
+            <td class="center-col" style="font-weight: 800; color: var(--info);">TOTAL</td>
+            <td style="font-weight: 800; color: var(--info);">${uncompKeys.length} Public Account Heads</td>
+            <td class="center-col" style="font-weight: 700;">${totUncompCount.toLocaleString()}</td>
+            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totUncompGross)}</td>
+            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totUncompNet)}</td>
+            <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Summary of uncompiled banking and deposit heads</td>
+          `;
+        } else {
+          exUncompTopTotal.innerHTML = `<td colspan="6" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero uncompiled heads in this period.</td>`;
+        }
+      }
+
       if (uncompKeys.length > 0) {
         uncompKeys.forEach(mh => {
           const it = uncompMap[mh];
@@ -3486,6 +3528,7 @@ function populateAllScreens(data) {
         tr.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">Zero uncompiled heads in this period.</td>`;
         uncompBody.appendChild(tr);
       }
+      syncStickyTableHeaders();
     }
 
     // 9. AG Deductions Table (File 3)
@@ -3763,6 +3806,23 @@ function updateFilterButtonState(tableKey, colKey) {
   }
 }
 
+function syncStickyTableHeaders() {
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.table-responsive').forEach(wrap => {
+      const table = wrap.querySelector('table');
+      if (!table) return;
+      const headerRow = table.querySelector('thead tr:first-child');
+      if (headerRow) {
+        const rect = headerRow.getBoundingClientRect();
+        if (rect.height > 0) {
+          const h = Math.round(rect.height);
+          wrap.style.setProperty('--table-header-height', h + 'px');
+        }
+      }
+    });
+  });
+}
+
 function renderGrossTopTotalRow(records) {
   const totalRow = document.getElementById('gross-top-total-row');
   if (!totalRow) return;
@@ -3988,6 +4048,7 @@ function renderGrossTable() {
     `;
     tbody.appendChild(tr);
   });
+  syncStickyTableHeaders();
 }
 
 function grossPrevPage() {
@@ -4219,6 +4280,7 @@ function renderClassificationTable() {
       tbody.appendChild(bRow);
     }
   });
+  syncStickyTableHeaders();
 }
 
 function classPrevPage() {

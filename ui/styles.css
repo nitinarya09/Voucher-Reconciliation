@@ -40,6 +40,8 @@
   --table-header-bg: #f1f5f9;
   --table-header-text: #334155;
   --table-stripe: #fafafa;
+  --table-total-bg: #eaf1fb;
+  --table-total-border: #2563eb;
 }
 
 [data-theme="dark"] {
@@ -79,6 +81,8 @@
   --table-header-bg: #141f32;
   --table-header-text: #cbd5e1;
   --table-stripe: rgba(255, 255, 255, 0.02);
+  --table-total-bg: #1c2c44;
+  --table-total-border: #3b82f6;
 }
 
 * {
@@ -593,6 +597,7 @@ button {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   position: relative;
+  --table-header-height: 38px;
 }
 
 table {
@@ -606,31 +611,35 @@ thead th {
   background-color: var(--table-header-bg);
   color: var(--table-header-text);
   font-weight: 600;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
   text-align: left;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   box-shadow: 0 1px 0 var(--border-color);
 }
 
 .table-top-total-row {
   position: sticky;
-  top: 38px;
-  z-index: 9;
-  background-color: rgba(37, 99, 235, 0.09) !important;
+  top: var(--table-header-height, 38px);
+  z-index: 15;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.table-top-total-row td {
-  padding: 9px 12px;
-  border-bottom: 2px solid var(--primary) !important;
+.table-top-total-row td,
+.table-top-total-row th {
+  position: sticky;
+  top: var(--table-header-height, 38px);
+  z-index: 15;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--table-total-border) !important;
   font-weight: 700;
   color: var(--text-main);
-  background-color: rgba(37, 99, 235, 0.09) !important;
+  background-color: var(--table-total-bg) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
 }
 
 tbody td {
@@ -1000,7 +1009,9 @@ th.sortable {
   cursor: pointer;
   user-select: none;
   transition: background-color 0.15s ease;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   padding-right: 22px;
 }
 
