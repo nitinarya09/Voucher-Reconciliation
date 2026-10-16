@@ -3202,6 +3202,8 @@ function populateTreasuryDropdown() {
   });
 }
 
+let clientLastScannedFileList = null;
+
 function onIngestionParamChange() {
   const trySelect = document.getElementById('import-treasury-select');
   const monthSelect = document.getElementById('import-month-select');
@@ -3209,7 +3211,7 @@ function onIngestionParamChange() {
 
   const criteria = {
     treasury_code: trySelect ? trySelect.value : '052',
-    month: monthSelect ? monthSelect.value : '04',
+    month: monthSelect ? monthSelect.value : '05',
     year: yearSelect ? yearSelect.value : '2025',
     folder_path: lastScannedFolder || ''
   };
@@ -3226,6 +3228,9 @@ function onIngestionParamChange() {
     }).catch(err => {
       console.error("rescan_folder error:", err);
     });
+  } else if (clientLastScannedFileList && clientLastScannedFileList.length > 0) {
+    showToast(`Re-filtering folder files for ${criteria.month}/${criteria.year} (Treasury: ${criteria.treasury_code})...`);
+    handleClientFileList(clientLastScannedFileList, criteria);
   }
 }
 
@@ -5055,83 +5060,206 @@ function setupClientFileHandlers() {
   });
 }
 
-function handleClientFileList(fileList) {
+function handleClientFileList(fileList, criteria) {
   if (!fileList || fileList.length === 0) return;
+  clientLastScannedFileList = fileList;
   const files = Array.from(fileList);
-  showToast(`Scanning ${files.length} files...`);
 
-  const AG_HEADS = new Set(["8009", "0070", "7610", "8011", "7615"]);
-  const TRY_HEADS = new Set(["8658", "0028", "0216", "0043", "0029"]);
+  const trySelect = document.getElementById('import-treasury-select');
+  const monthSelect = document.getElementById('import-month-select');
+  const yearSelect = document.getElementById('import-year-select');
 
-  function detectRole(file, lines) {
-    const lfn = file.name.toLowerCase();
+  const activeCriteria = {
+    treasury_code: (criteria && criteria.treasury_code) || (trySelect ? trySelect.value : '052'),
+    month: (criteria && criteria.month) || (monthSelect ? monthSelect.value : '05'),
+    year: (criteria && criteria.year) || (yearSelect ? yearSelect.value : '2025')
+  };
 
-    // 1. Filename heuristic matching
+  const MONTH_MAP = {
+    '01': ['01', 'jan', 'january'],
+    '02': ['02', 'feb', 'february'],
+    '03': ['03', 'mar', 'march'],
+    '04': ['04', 'apr', 'april'],
+    '05': ['05', 'may'],
+    '06': ['06', 'jun', 'june'],
+    '07': ['07', 'jul', 'july'],
+    '08': ['08', 'aug', 'august'],
+    '09': ['09', 'sep', 'sept', 'september'],
+    '10': ['10', 'oct', 'october'],
+    '11': ['11', 'nov', 'november'],
+    '12': ['12', 'dec', 'december']
+  };
+
+  const mClean = String(activeCriteria.month || '05').trim().padStart(2, '0');
+  const targetMonthTokens = MONTH_MAP[mClean] || [mClean.toLowerCase()];
+
+  const otherMonthTokens = [];
+  for (const [k, toks] of Object.entries(MONTH_MAP)) {
+    if (k !== mClean) {
+      otherMonthTokens.push(...toks);
+    }
+  }
+
+  const yStr = String(activeCriteria.year || '2025').trim();
+  const targetYearTokens = [yStr];
+  if (yStr.length === 4) targetYearTokens.push(yStr.slice(2)); // '25'
+
+  const tClean = String(activeCriteria.treasury_code || '052').trim().toLowerCase();
+  const targetTryTokens = [tClean];
+  if (tClean === '052' || tClean === 'val') targetTryTokens.push('052', 'val', 'vallabh');
+  else if (tClean === '051' || tClean === 'vin') targetTryTokens.push('051', 'vin', 'vindhyachal');
+  else if (tClean === '050' || tClean === 'bpl') targetTryTokens.push('050', 'bpl', 'bhopal');
+
+  function detectRoleFromFilename(fn, relPath) {
+    const lfn = fn.toLowerCase();
+    const lrel = (relPath || '').toLowerCase();
+
+    // File 6: COMPAY
     if (lfn.includes("compay") || lfn.includes("vlc") || /(^0?6[_\s\.-]|file[_\s-]?0?6\b)/i.test(lfn)) return "file_6";
+    // File 2: Voucher Detail Headwise
     if (/details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b/i.test(lfn)) return "file_2";
+    // File 1: Voucher Details (Bill Master)
     if (/voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b/i.test(lfn)) return "file_1";
+    // File 4: Non-AG / Treasury Deduction
     if (/non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b/i.test(lfn)) return "file_4";
-    if (/ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b/i.test(lfn)) return "file_3";
+    // File 3: AG Deduction
+    if (/ag[_\s-]?deduction|ag[_\s-]?ded|^0?3[_\s\.-]|file[_\s-]?0?3\b/i.test(lfn)) return "file_3";
+    // File 5: Voucher Summary (Net SOP)
     if (/voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b/i.test(lfn) || (lfn.endsWith("sop.txt") && !/^[1234][_\.]/i.test(lfn))) return "file_5";
-
-    // 2. Header and content structural inspection
-    if (!lines || lines.length === 0) return null;
-    const header = lines[0].toUpperCase();
-    if (header.includes("SS_SOP") || header.includes("TE_NO") || header.includes("SEC_MHCD")) return "file_6";
-    if (header.includes("GROSS_AMT") && header.includes("NET_AMT")) return "file_1";
-    if (header.includes("GROSS_AMT") && !header.includes("NET_AMT")) return "file_2";
-    if (header.includes("NET_AMT") && !header.includes("GROSS_AMT")) return "file_5";
-
-    if (header.includes("DED_MHCD") || header.includes("DED_AMT")) {
-      let agScore = 0;
-      let tryScore = 0;
-      for (let i = 1; i < Math.min(lines.length, 10); i++) {
-        const parts = lines[i].split(/[\t,;|]/);
-        parts.forEach(p => {
-          const trimmed = p.trim();
-          if (AG_HEADS.has(trimmed)) agScore++;
-          if (TRY_HEADS.has(trimmed)) tryScore++;
-        });
-      }
-      return agScore >= tryScore ? "file_3" : "file_4";
-    }
-
-    // 3. Positional column count for raw comma-delimited IFMIS files (no headers)
-    const firstLine = lines[0].trim();
-    const cols = firstLine.split(',');
-    if (cols.length >= 16 && cols[0].length <= 2) {
-      return "file_1";
-    }
-    if (cols.length >= 14 && (cols[13] === 'V' || cols[13] === 'C' || cols[14] === 'P' || cols[14] === 'C')) {
-      return "file_2";
-    }
-    if (cols.length === 10) {
-      return "file_5";
-    }
-    if (cols.length >= 12 && cols.some(c => AG_HEADS.has(c.trim()))) {
-      return "file_3";
-    }
-    if (cols.length >= 12 && cols.some(c => TRY_HEADS.has(c.trim()))) {
-      return "file_4";
-    }
 
     return null;
   }
 
-  const identified = {};
-  const firstFile = files[0];
-  const relPath = firstFile && firstFile.webkitRelativePath ? firstFile.webkitRelativePath : '';
-  const folderName = relPath && relPath.includes('/') ? relPath.split('/')[0] : 'Selected Folder';
+  function scoreFileCandidate(fn, relPath) {
+    const haystack = (fn + ' ' + (relPath || '')).toLowerCase();
+    let score = 0;
 
-  const readPromises = files.map(file => {
-    return new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const text = e.target.result || '';
-        const lines = text.split(/\r?\n/).slice(0, 10);
-        const role = detectRole(file, lines);
-        if (role && !identified[role]) {
-          identified[role] = file;
+    // Target month match: +100
+    const hasTargetMonth = targetMonthTokens.some(tok => {
+      const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
+      return rx.test(haystack);
+    });
+    if (hasTargetMonth) score += 100;
+
+    // Different month penalty: -200
+    const hasOtherMonth = otherMonthTokens.some(tok => {
+      const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
+      return rx.test(haystack);
+    });
+    if (hasOtherMonth) score -= 200;
+
+    // Target year match: +50
+    if (targetYearTokens.some(tok => haystack.includes(tok))) score += 50;
+
+    // Target treasury match: +30
+    if (targetTryTokens.some(tok => haystack.includes(tok))) score += 30;
+
+    return score;
+  }
+
+  // 1. Group candidates by role using filename patterns and score them
+  const candidatesByRole = { file_1: [], file_2: [], file_3: [], file_4: [], file_5: [], file_6: [] };
+  const unassignedFiles = [];
+
+  for (const file of files) {
+    const rel = file.webkitRelativePath || file.name;
+    const role = detectRoleFromFilename(file.name, rel);
+    if (role) {
+      const score = scoreFileCandidate(file.name, rel);
+      candidatesByRole[role].push({ file, score, name: file.name, rel });
+    } else {
+      unassignedFiles.push(file);
+    }
+  }
+
+  const selectedFiles = {};
+  for (const r of ['file_1', 'file_2', 'file_3', 'file_4', 'file_5', 'file_6']) {
+    if (candidatesByRole[r].length > 0) {
+      candidatesByRole[r].sort((a, b) => b.score - a.score);
+      const best = candidatesByRole[r][0];
+      if (best.score > -100 || candidatesByRole[r].length === 1) {
+        selectedFiles[r] = best.file;
+      }
+    }
+  }
+
+  // Fallback structural inspection for any unfilled roles if unassigned files exist
+  const missingRoles = ['file_1', 'file_2', 'file_3', 'file_4', 'file_5', 'file_6'].filter(r => !selectedFiles[r]);
+  const inspectPromises = [];
+
+  if (missingRoles.length > 0 && unassignedFiles.length > 0) {
+    const AG_HEADS = new Set(["8009", "0070", "7610", "8011", "7615"]);
+    const TRY_HEADS = new Set(["8658", "0028", "0216", "0043", "0029"]);
+
+    function detectRoleFromLines(lines) {
+      if (!lines || lines.length === 0) return null;
+      const header = lines[0].toUpperCase();
+      if (header.includes("SS_SOP") || header.includes("TE_NO") || header.includes("SEC_MHCD")) return "file_6";
+      if (header.includes("GROSS_AMT") && header.includes("NET_AMT")) return "file_1";
+      if (header.includes("GROSS_AMT") && !header.includes("NET_AMT")) return "file_2";
+      if (header.includes("NET_AMT") && !header.includes("GROSS_AMT")) return "file_5";
+
+      if (header.includes("DED_MHCD") || header.includes("DED_AMT")) {
+        let agScore = 0, tryScore = 0;
+        for (let i = 1; i < Math.min(lines.length, 10); i++) {
+          const parts = lines[i].split(/[\t,;|]/);
+          parts.forEach(p => {
+            const trimmed = p.trim();
+            if (AG_HEADS.has(trimmed)) agScore++;
+            if (TRY_HEADS.has(trimmed)) tryScore++;
+          });
+        }
+        return agScore >= tryScore ? "file_3" : "file_4";
+      }
+
+      const firstLine = lines[0].trim();
+      const cols = firstLine.split(',');
+      if (cols.length >= 16 && cols[0].length <= 2) return "file_1";
+      if (cols.length >= 14 && (cols[13] === 'V' || cols[13] === 'C' || cols[14] === 'P' || cols[14] === 'C')) return "file_2";
+      if (cols.length === 10) return "file_5";
+      if (cols.length >= 12 && cols.some(c => AG_HEADS.has(c.trim()))) return "file_3";
+      if (cols.length >= 12 && cols.some(c => TRY_HEADS.has(c.trim()))) return "file_4";
+
+      return null;
+    }
+
+    for (const file of unassignedFiles.slice(0, 20)) {
+      inspectPromises.push(new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const text = e.target.result || '';
+          const lines = text.split(/\r?\n/).slice(0, 10);
+          const role = detectRoleFromLines(lines);
+          if (role && !selectedFiles[role]) {
+            selectedFiles[role] = file;
+          }
+          resolve();
+        };
+        reader.onerror = () => resolve();
+        reader.readAsText(file.slice(0, 4096));
+      }));
+    }
+  }
+
+  Promise.all(inspectPromises).then(() => {
+    const selectedRoles = Object.keys(selectedFiles);
+    if (selectedRoles.length === 0) {
+      showToast(`No matching reconciliation files found for ${activeCriteria.month}/${activeCriteria.year}.`, true);
+      return;
+    }
+
+    const firstFile = files[0];
+    const relPath = firstFile && firstFile.webkitRelativePath ? firstFile.webkitRelativePath : '';
+    const folderName = relPath && relPath.includes('/') ? relPath.split('/')[0] : 'Selected Folder';
+
+    showToast(`Reading ${selectedRoles.length} selected files for ${mClean}/${activeCriteria.year}...`);
+
+    const readPromises = selectedRoles.map(role => {
+      const file = selectedFiles[role];
+      return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const text = e.target.result || '';
           clientUploadedRawFiles[role] = text;
           const lineCount = (text.match(/\n/g) || []).length;
           const displayPath = file.webkitRelativePath || file.name;
@@ -5141,27 +5269,37 @@ function handleClientFileList(fileList) {
             records: lineCount,
             size: file.size
           };
-        }
-        resolve();
-      };
-      reader.onerror = () => resolve();
-      reader.readAsText(file);
+          resolve();
+        };
+        reader.onerror = () => resolve();
+        reader.readAsText(file);
+      });
     });
-  });
 
-  Promise.all(readPromises).then(() => {
-    renderFileCards();
-    const identifiedNames = {};
-    for (const [r, f] of Object.entries(identified)) {
-      identifiedNames[r] = f.webkitRelativePath || f.name;
-    }
-    const count = Object.keys(identified).length;
-    renderFolderImportStatus({
-      folder: folderName,
-      identified: identifiedNames,
-      is_all_ready: count === 6
+    Promise.all(readPromises).then(() => {
+      renderFileCards();
+      const identifiedNames = {};
+      for (const [r, f] of Object.entries(selectedFiles)) {
+        identifiedNames[r] = f.webkitRelativePath || f.name;
+      }
+      const count = Object.keys(selectedFiles).length;
+      const monthLabel = MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean;
+
+      renderFolderImportStatus({
+        folder: `${folderName} [${monthLabel} ${activeCriteria.year} — Treasury: ${activeCriteria.treasury_code}]`,
+        identified: identifiedNames,
+        is_all_ready: count === 6,
+        target_month: monthLabel,
+        target_year: activeCriteria.year,
+        target_try: activeCriteria.treasury_code
+      });
+
+      if (count === 6) {
+        showToast(`✅ All 6 files successfully loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
+      } else {
+        showToast(`Auto-identified ${count}/6 files for ${monthLabel} ${activeCriteria.year}. ${6 - count} file(s) remaining.`);
+      }
     });
-    showToast(`Loaded ${count}/6 files from ${folderName}! Ready to reconcile.`);
   });
 }
 
