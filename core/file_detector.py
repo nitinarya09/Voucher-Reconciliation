@@ -38,12 +38,14 @@ class SmartFileIdentifier:
 
         # Check parent folder for COMPAY if not present in folder
         if check_parent_for_compay:
-            parent_dir = os.path.dirname(os.path.abspath(folder_path))
-            if parent_dir and os.path.exists(parent_dir):
-                for fn in os.listdir(parent_dir):
-                    ext = os.path.splitext(fn)[1].lower()
-                    if ext in ['.xls', '.xlsx', '.csv', '.txt'] and "compay" in fn.lower():
-                        candidates.append((fn, os.path.join(parent_dir, fn)))
+            has_compay = any("compay" in fn.lower() or "vlc" in fn.lower() for fn, _ in candidates)
+            if not has_compay:
+                parent_dir = os.path.dirname(os.path.abspath(folder_path))
+                if parent_dir and os.path.exists(parent_dir):
+                    for fn in os.listdir(parent_dir):
+                        ext = os.path.splitext(fn)[1].lower()
+                        if ext in ['.xls', '.xlsx', '.csv', '.txt'] and "compay" in fn.lower():
+                            candidates.append((fn, os.path.join(parent_dir, fn)))
 
         # Month keywords helper
         MONTH_MAP = {
@@ -60,20 +62,35 @@ class SmartFileIdentifier:
             '11': ['11', 'nov', 'november'],
             '12': ['12', 'dec', 'december']
         }
+        is_all_months = (str(month).strip().upper() == 'ALL') if month else False
+        is_all_treasuries = (str(treasury_code).strip().upper() == 'ALL') if treasury_code else False
+        is_multi_mode = is_all_months or is_all_treasuries
+
         month_tokens = []
-        if month:
+        other_month_tokens = []
+        if month and not is_all_months:
             m_clean = str(month).strip().lower()
             month_tokens = MONTH_MAP.get(m_clean, [m_clean])
+            for k, toks in MONTH_MAP.items():
+                if k != m_clean:
+                    other_month_tokens.extend(toks)
 
         year_tokens = []
-        if year:
+        if year and str(year).strip().upper() != 'ALL':
             y_str = str(year).strip()
-            year_tokens = [y_str]
-            if len(y_str) == 4:
-                year_tokens.append(y_str[2:]) # e.g. '25' for '2025'
+            if '-' in y_str:
+                p = y_str.split('-')
+                year_tokens = [p[0], p[1], p[0][-2:], p[1][-2:]]
+            elif len(y_str) == 4:
+                year_tokens = [y_str, y_str[2:]]
+                if is_all_months:
+                    next_y = str(int(y_str) + 1)
+                    year_tokens.extend([next_y, next_y[2:]])
+            else:
+                year_tokens = [y_str]
 
         try_tokens = []
-        if treasury_code:
+        if treasury_code and not is_all_treasuries:
             t_clean = str(treasury_code).strip().lower()
             try_tokens = [t_clean]
             if t_clean == '052' or t_clean == 'val':
@@ -82,6 +99,93 @@ class SmartFileIdentifier:
                 try_tokens.extend(['051', 'vin', 'vindhyachal'])
             elif t_clean == '050' or t_clean == 'bpl':
                 try_tokens.extend(['050', 'bpl', 'bhopal'])
+
+        # -------------------------------------------------------------
+        # Multi-File Mode: Full Financial Year / Multi-Treasury Ingestion
+        # -------------------------------------------------------------
+        if is_multi_mode:
+            identified = {f"file_{i}": [] for i in range(1, 7)}
+            seen_keys = set()
+            logs = []
+
+            for fn, full_p in candidates:
+                # 1. Skip empty files
+                if not os.path.exists(full_p) or os.path.getsize(full_p) == 0:
+                    continue
+                # 2. Skip HTML error downloads
+                try:
+                    with open(full_p, 'rb') as f_chk:
+                        h = f_chk.read(256).lower()
+                        if b'<!doctype' in h or b'<html' in h or b'504 gateway' in h:
+                            continue
+                except Exception:
+                    pass
+
+                lfn = fn.lower()
+                role = None
+                if "compay" in lfn or "vlc" in lfn or re.search(r'(^0?6[_\s\.-]|file[_\s-]?0?6\b)', lfn):
+                    role = "file_6"
+                elif re.search(r'(details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b)', lfn):
+                    role = "file_2"
+                elif re.search(r'(voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b)', lfn):
+                    role = "file_1"
+                elif re.search(r'(non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b)', lfn):
+                    role = "file_4"
+                elif re.search(r'(ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b)', lfn):
+                    role = "file_3"
+                elif re.search(r'(voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b)', lfn) or (lfn.endswith("sop.txt") and not re.match(r'^[1234][_\.]', lfn)):
+                    role = "file_5"
+
+                if not role:
+                    continue
+
+                haystack = (fn + " " + full_p).lower()
+                if try_tokens and not any(tok in haystack for tok in try_tokens):
+                    continue
+                if year_tokens and not any(tok in haystack for tok in year_tokens):
+                    continue
+                if month_tokens:
+                    has_target = any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in month_tokens)
+                    if not has_target:
+                        matches_year = year_tokens and any(tok in haystack for tok in year_tokens)
+                        if role == "file_6" and (matches_year or "compay" in lfn):
+                            pass
+                        else:
+                            continue
+
+                dedup_key = (role, fn.lower(), os.path.getsize(full_p))
+                if dedup_key in seen_keys:
+                    continue
+                seen_keys.add(dedup_key)
+                identified[role].append(full_p)
+
+            # If File 6 contains month-specific COMPAY files, prefer them over annual split files
+            if month_tokens and identified["file_6"]:
+                month_specific_f6 = [p for p in identified["file_6"] if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', (os.path.basename(p) + " " + p).lower()) for tok in month_tokens)]
+                if month_specific_f6:
+                    identified["file_6"] = month_specific_f6
+
+            # Fallback fingerprinting for empty roles
+            empty_roles = [r for r, fl in identified.items() if not fl]
+            if empty_roles:
+                for fn, full_p in candidates:
+                    dedup_key = (fn.lower(), os.path.getsize(full_p))
+                    if any(dedup_key == (os.path.basename(p).lower(), os.path.getsize(p)) for fl in identified.values() for p in fl):
+                        continue
+                    role, reason = cls._fingerprint_file(full_p, empty_roles)
+                    if role and role in empty_roles:
+                        identified[role].append(full_p)
+                        logs.append(f"[Content Fingerprint] Identified '{fn}' as {role.upper()} ({reason})")
+
+            for r in identified:
+                identified[r].sort(key=lambda p: os.path.basename(p).lower())
+                cnt = len(identified[r])
+                if cnt > 0:
+                    logs.append(f"[Multi-File Scan] Identified {cnt} files for {r.upper()}")
+
+            all_matched = {p for fl in identified.values() for p in fl}
+            unmatched = [fn for fn, full_p in candidates if full_p not in all_matched]
+            return identified, logs, unmatched
 
         def compute_candidate_score(filename, full_path):
             haystack = (filename + " " + full_path).lower()

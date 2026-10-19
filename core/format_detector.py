@@ -90,7 +90,50 @@ class FormatDetector:
         Performs full inspection of the input file.
         Returns a dict of metadata, detected options, and sample rows.
         """
-        file_size = os.path.getsize(file_path)
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        if file_size == 0:
+            return {
+                "file_path": file_path,
+                "filename": os.path.basename(file_path),
+                "file_size": 0,
+                "encoding": "utf-8",
+                "delimiter": ",",
+                "has_header": False,
+                "headers": [],
+                "column_count": 0,
+                "total_lines": 0,
+                "blank_lines": 0,
+                "data_records_estimate": 0,
+                "preview_rows": [],
+                "is_empty": True
+            }
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in ['.xlsx', '.xls']:
+            try:
+                import pandas as pd
+                df = pd.read_excel(file_path, nrows=max_preview_rows + 2, dtype=str)
+                df = df.fillna('')
+                headers = [str(c).strip() for c in df.columns]
+                preview = [list(r) for r in df.values[:max_preview_rows]]
+                return {
+                    "file_path": file_path,
+                    "filename": os.path.basename(file_path),
+                    "file_size": file_size,
+                    "encoding": "binary/xlsx",
+                    "delimiter": "[Excel Sheet]",
+                    "has_header": True,
+                    "headers": headers,
+                    "column_count": len(headers),
+                    "total_lines": len(df),
+                    "blank_lines": 0,
+                    "data_records_estimate": len(df),
+                    "preview_rows": preview,
+                    "is_excel": True
+                }
+            except Exception:
+                pass
+
         encoding = cls.detect_encoding(file_path)
 
         # Read sample lines

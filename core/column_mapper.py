@@ -31,7 +31,9 @@ INTERNAL_FIELDS = {
     "vc": {"label": "Voted / Charged", "type": "string", "required_for_matching": False},
     "pn": {"label": "Plan / Non-Plan", "type": "string", "required_for_matching": False},
     "refund": {"label": "Refund Flag", "type": "string", "required_for_matching": False},
-    "sec_mhcd": {"label": "Section Major Head (SEC_MHCD)", "type": "string", "required_for_matching": False}
+    "sec_mhcd": {"label": "Section Major Head (SEC_MHCD)", "type": "string", "required_for_matching": False},
+    "month": {"label": "Accounting Month", "type": "string", "required_for_matching": False},
+    "year": {"label": "Financial Year", "type": "string", "required_for_matching": False}
 }
 
 class ColumnMapper:

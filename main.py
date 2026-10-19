@@ -32,38 +32,21 @@ class DesktopReconciliationApi:
         self._logger = AuditLogger(log_dir=os.path.join(EXE_DIR, "logs"))
         self._engine = None
         self._last_results = None
-        # Eagerly preload default workspace files so data is immediately available
-        self._auto_detect_default_files()
-        if self._importer.is_all_ready():
-            try:
-                self._engine = ComprehensiveReconciliationEngine(self._importer, logger=self._logger)
-                self._last_results = self._engine.execute()
-            except Exception as e:
-                self._logger.log_error("STARTUP_RECON", str(e))
 
     def get_initial_state(self):
-        """Initial state passed to UI upon launch."""
-        if not self._importer.is_all_ready():
-            self._auto_detect_default_files()
-
+        """Initial state passed to UI upon launch - opens 100% clean and blank."""
         summaries = self._importer.get_all_summaries()
         
         file_states = {}
-        for fid, s in summaries.items():
+        for fid in ["file_1", "file_2", "file_3", "file_4", "file_5", "file_6"]:
+            s = summaries.get(fid, {})
             file_states[fid] = {
                 "path": s.get("file_path", ""),
                 "loaded": s.get("is_loaded", False),
                 "records": s.get("valid_records_count", 0),
+                "unique_vouchers": s.get("unique_vouchers_count", 0),
                 "size": s.get("file_size", 0)
             }
-
-        # Auto-run reconciliation if all 6 default files are loaded and not already computed
-        if not self._last_results and self._importer.is_all_ready():
-            try:
-                self._engine = ComprehensiveReconciliationEngine(self._importer, logger=self._logger)
-                self._last_results = self._engine.execute()
-            except Exception as e:
-                self._logger.log_error("STARTUP_RECON", str(e))
 
         return {
             "file_states": file_states,
@@ -109,6 +92,7 @@ class DesktopReconciliationApi:
                 "path": s.get("file_path", ""),
                 "loaded": s.get("is_loaded", False),
                 "records": s.get("valid_records_count", 0),
+                "unique_vouchers": s.get("unique_vouchers_count", 0),
                 "size": s.get("file_size", 0)
             }
         return {"file_states": file_states}
@@ -122,17 +106,19 @@ class DesktopReconciliationApi:
         criteria = criteria or {}
         selected_folder = criteria.get('folder_path', '')
         if not selected_folder:
+            opened_dialog = False
             try:
                 window = webview.windows[0] if webview.windows else None
                 if window:
                     dialog_type = getattr(webview.FileDialog, 'FOLDER', getattr(webview, 'FOLDER_DIALOG', 20))
                     res = window.create_file_dialog(dialog_type)
+                    opened_dialog = True
                     if res and len(res) > 0:
                         selected_folder = res[0]
             except Exception:
-                pass
+                opened_dialog = False
 
-            if not selected_folder:
+            if not selected_folder and not opened_dialog:
                 try:
                     from tkinter import Tk, filedialog
                     root = Tk()
@@ -156,10 +142,18 @@ class DesktopReconciliationApi:
 
         loaded_count = 0
         for fid, path in identified.items():
+            if not path:
+                continue
             try:
-                self._importer.register_file(fid, path)
+                self._importer.register_file(
+                    fid,
+                    path,
+                    target_month=criteria.get('month'),
+                    target_year=criteria.get('year')
+                )
                 loaded_count += 1
-                self._logger.log_event("AUTO_IMPORT", f"Auto-mapped {fid.upper()} to '{os.path.basename(path)}'")
+                disp_name = os.path.basename(path) if isinstance(path, str) else (f"{len(path)} files merged" if len(path) > 1 else (os.path.basename(path[0]) if path else "None"))
+                self._logger.log_event("AUTO_IMPORT", f"Auto-mapped {fid.upper()} to '{disp_name}'")
             except Exception as e:
                 self._logger.log_error("AUTO_IMPORT", f"Failed to register {fid}: {e}")
 
@@ -168,21 +162,36 @@ class DesktopReconciliationApi:
         for fid, s in summaries.items():
             file_states[fid] = {
                 "path": s.get("file_path", ""),
+                "filename": s.get("filename", ""),
                 "loaded": s.get("is_loaded", False),
                 "records": s.get("valid_records_count", 0),
+                "unique_vouchers": s.get("unique_vouchers_count", 0),
                 "size": s.get("file_size", 0)
             }
+
+        identified_display = {}
+        for k, v in identified.items():
+            if isinstance(v, str):
+                identified_display[k] = os.path.basename(v)
+            elif isinstance(v, (list, tuple)) and v:
+                if len(v) == 1:
+                    identified_display[k] = os.path.basename(v[0])
+                else:
+                    identified_display[k] = f"{len(v)} files ({os.path.basename(v[0])}...)"
+            else:
+                identified_display[k] = ""
 
         return {
             "success": True,
             "folder": selected_folder,
             "folder_name": os.path.basename(selected_folder),
             "loaded_count": loaded_count,
-            "identified": {k: os.path.basename(v) for k, v in identified.items()},
+            "identified": identified_display,
             "logs": logs,
             "unmatched": unmatched,
             "file_states": file_states,
-            "is_all_ready": self._importer.is_all_ready()
+            "is_all_ready": self._importer.is_all_6_ready(),
+            "is_ready_to_reconcile": self._importer.is_ready_to_reconcile()
         }
 
     def rescan_folder(self, criteria):
@@ -227,6 +236,7 @@ class DesktopReconciliationApi:
                 "filename": os.path.basename(selected_path),
                 "is_loaded": summary.get("is_loaded", False),
                 "records_count": summary.get("valid_records_count", 0),
+                "unique_vouchers": summary.get("unique_vouchers_count", 0),
                 "file_size": summary.get("file_size", 0)
             }
         return {}
@@ -244,10 +254,10 @@ class DesktopReconciliationApi:
             return {"error": str(e)}
 
     def run_reconciliation(self, key_config, tolerance=0.00):
-        """Executes full reconciliation with user-selected matching key and tolerance."""
+        """Executes full reconciliation with user-selected matching key, tolerance, and major head scope."""
         try:
-            if not self._importer.is_all_ready():
-                self._auto_detect_default_files()
+            if not self._importer.is_ready_to_reconcile():
+                return {"error": "Please load at least File 2 (Detailed Gross) and File 6 (VLC COMPAY) before running reconciliation."}
 
             # Build key fields list
             key_fields = []
@@ -260,11 +270,16 @@ class DesktopReconciliationApi:
             if not key_fields:
                 key_fields = ["try_cd", "mhcd", "vou_no"]
 
+            mh_scope = key_config.get("mh_scope_0001_5999", True)
+            target_month = key_config.get("target_month")
+
             self._engine = ComprehensiveReconciliationEngine(
                 self._importer,
                 key_fields=key_fields,
                 tolerance=Decimal(str(tolerance)),
-                logger=self._logger
+                logger=self._logger,
+                mh_scope_consolidated=mh_scope,
+                target_month=target_month
             )
             self._last_results = self._engine.execute()
             return self._last_results
@@ -283,7 +298,7 @@ class DesktopReconciliationApi:
             if format_type == 'excel':
                 p = exporter.export_excel(section=section)
             elif format_type == 'csv':
-                p = exporter.export_csv()
+                p = exporter.export_csv(section=section)
             elif format_type == 'pdf':
                 p = exporter.export_pdf()
             elif format_type == 'txt':
@@ -306,20 +321,20 @@ class DesktopReconciliationApi:
             return {"error": "No reconciliation results available to export."}
 
         name_map = {
-            "grand_tally": "Grand_Tally_Balance_Sheet",
-            "gross_recon": "Gross_Recon_IFMIS_vs_COMPAY",
+            "grand_tally": "IFMIS_VLC_Grand_Tally_Balance_Sheet",
+            "gross_recon": "IFMIS_VLC_Primary_Gross_Reconciliation_File02_vs_File06",
             "val_f1": "IFMIS_BillMaster_Gross_Net_Deductions",
-            "net_recon": "Net_Recon_BillMaster_vs_NetSOP",
-            "ag_ded": "AG_Deductions_Schedule",
-            "non_ag_ded": "Treasury_Deductions_Schedule",
-            "cross_file": "Statutory_Cross_File_12_Checks",
-            "exceptions": "Exceptions_Register_MH4801_Uncompiled",
-            "head_wise": "Major_Head_Summary_Tally",
-            "classification_tally": "Classification_Tally_15_Digit",
-            "refunds": "Refund_Vouchers_And_Deduct_Exp"
+            "net_recon": "IFMIS_Net_Reconciliation",
+            "ag_ded": "IFMIS_AG_Deductions_Schedule",
+            "non_ag_ded": "IFMIS_Treasury_Deductions_Schedule",
+            "cross_file": "IFMIS_12_Cross_File_Consistency_Checks",
+            "exceptions": "IFMIS_Exceptions_Register",
+            "head_wise": "IFMIS_Major_Head_Summary_Tally",
+            "classification_tally": "IFMIS_15_Digit_Classification_Tally",
+            "refunds": "IFMIS_Refund_Vouchers_And_Deduct_Exp"
         }
         ext = ".xlsx" if format_type == 'excel' else (".pdf" if format_type == 'pdf' else (".csv" if format_type == 'csv' else ".txt"))
-        prefix = name_map.get(section, "Audit_Reconciliation_Report")
+        prefix = name_map.get(section, "IFMIS_VLC_Reconciliation_Workbook")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"{prefix}_{timestamp}{ext}"
 
@@ -358,7 +373,7 @@ class DesktopReconciliationApi:
             if format_type == 'excel':
                 p = exporter.export_excel(output_path=selected_path, section=section)
             elif format_type == 'csv':
-                p = exporter.export_csv(output_path=selected_path)
+                p = exporter.export_csv(output_path=selected_path, section=section)
             elif format_type == 'pdf':
                 p = exporter.export_pdf(output_path=selected_path)
             elif format_type == 'txt':

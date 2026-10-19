@@ -63,10 +63,24 @@ class MatchingEngine:
 
     def build_key(self, record):
         """Constructs normalized composite key from record."""
+        m = record.get("month", "")
+        y = record.get("year", "")
+        try_cd = record.get("try_cd", "")
+        sec_m = str(record.get("sec_mhcd") or "").strip()
+        effective_mhcd = '8009' if sec_m == '8009' else (record.get("mhcd") or "")
+        vou_no = record.get("vou_no", "")
+
+        # When multi-month/period data is loaded, incorporate month & year to prevent collisions
+        if m and y:
+            return f"{str(try_cd).strip()}_{str(m).strip()}_{str(y).strip()}_{str(effective_mhcd).strip()}_{str(vou_no).strip()}"
+
         parts = []
         for k in self.key_fields:
-            val = record.get(k, "")
-            parts.append(str(val).strip())
+            if k == 'mhcd':
+                parts.append(str(effective_mhcd).strip())
+            else:
+                val = record.get(k, "")
+                parts.append(str(val).strip())
         return "_".join(parts)
 
     def group_by_key(self, records):

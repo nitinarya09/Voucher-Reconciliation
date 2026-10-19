@@ -35,25 +35,25 @@
 
       <!-- Workspace 3: Core Reconciliation Workbench -->
       <div class="nav-section-title">RECONCILIATION WORKBENCH</div>
-      <button class="nav-item" onclick="navigate('gross-recon')">
+      <button class="nav-item" onclick="navigate('gross-recon')" id="nav-btn-gross-recon">
         <span class="nav-icon">⚖️</span> <span class="nav-text">Gross Parity (File 02 vs 06)</span>
       </button>
-      <button class="nav-item" onclick="navigate('classification-tally')">
+      <button class="nav-item" onclick="navigate('classification-tally')" id="nav-btn-classification-tally">
         <span class="nav-icon">🏷️</span> <span class="nav-text">15-Digit Classification Tally</span>
       </button>
-      <button class="nav-item" onclick="navigate('gross-net-val')">
+      <button class="nav-item" onclick="navigate('gross-net-val')" id="nav-btn-gross-net-val" style="display: none;">
         <span class="nav-icon">➕</span> <span class="nav-text">Bill Gross–Net (File 01)</span>
       </button>
-      <button class="nav-item" onclick="navigate('net-recon')">
+      <button class="nav-item" onclick="navigate('net-recon')" id="nav-btn-net-recon" style="display: none;">
         <span class="nav-icon">💳</span> <span class="nav-text">Net Bank SOP (File 01 vs 05)</span>
       </button>
-      <button class="nav-item" onclick="navigate('ag-ded')">
+      <button class="nav-item" onclick="navigate('ag-ded')" id="nav-btn-ag-ded" style="display: none;">
         <span class="nav-icon">📑</span> <span class="nav-text">AG Deductions (File 03 GPF/Rec)</span>
       </button>
-      <button class="nav-item" onclick="navigate('non-ag-ded')">
+      <button class="nav-item" onclick="navigate('non-ag-ded')" id="nav-btn-non-ag-ded" style="display: none;">
         <span class="nav-icon">📑</span> <span class="nav-text">Treasury Deductions (File 04 TDS/PT)</span>
       </button>
-      <button class="nav-item" onclick="navigate('refunds')">
+      <button class="nav-item" onclick="navigate('refunds')" id="nav-btn-refunds" style="display: none;">
         <span class="nav-icon">💸</span> <span class="nav-text">Refunds & Deduct-Exp (MH 900)</span>
       </button>
 
@@ -120,7 +120,7 @@
           <span class="badge badge-info" id="treasury-badge">🏛️ Treasury: 052 (VAL) — Oct 2025</span>
         </div>
         <div class="header-badge-group">
-          <span class="badge badge-success" id="overall-status-badge" title="Macro Mathematical Balance across Treasury & VLC">● Ready to Process</span>
+          <span class="badge badge-success" id="overall-status-badge" style="cursor: pointer;" onclick="showDiscrepancyBreakdown()" title="Macro Mathematical Balance across Treasury & VLC — Click to view Discrepancy Breakdown">● Ready to Process</span>
           <span class="badge badge-warning" id="audit-exceptions-badge" style="display: none; cursor: pointer;" onclick="navigate('exceptions')" title="Click to inspect all voucher exceptions and discrepancy analysis"></span>
         </div>
       </div>
@@ -149,7 +149,7 @@
           <div class="metric-card-val" id="kpi-ded-total">₹0.00</div>
           <div class="metric-card-sub" id="kpi-ded-breakdown">AG Ded + Treasury Ded</div>
         </div>
-        <div class="metric-card" style="border-left: 4px solid var(--success);">
+        <div class="metric-card" style="border-left: 4px solid var(--success); cursor: pointer;" onclick="showDiscrepancyBreakdown()" title="Click to inspect exact statutory Grand Tally Reconciliation Bridge & Discrepancy Breakdown">
           <div class="metric-card-title">Reconciliation Discrepancy</div>
           <div class="metric-card-val" style="color: var(--success);" id="kpi-discrepancy">₹0.00</div>
           <div class="metric-card-sub">100.0000% Math Parity Verified</div>
@@ -292,18 +292,19 @@
 
         <div class="ingestion-config-grid">
           <div class="config-field">
-            <label for="import-treasury-select">Treasury (All 58 MP Treasuries):</label>
+            <label for="import-treasury-select">Treasury (Statewide / MP Treasuries):</label>
             <select id="import-treasury-select" class="config-select" onchange="onIngestionParamChange()">
-              <!-- Populated dynamically from all 58 treasuries -->
+              <!-- Populated dynamically from all 58 treasuries with ALL option -->
             </select>
           </div>
           <div class="config-field">
-            <label for="import-month-select">Accounting Month:</label>
+            <label for="import-month-select">Accounting Month / Period:</label>
             <select id="import-month-select" class="config-select" onchange="onIngestionParamChange()">
+              <option value="ALL" selected>ALL — Complete Financial Year (All 12 Months: Apr–Mar)</option>
               <option value="01">01 - January</option>
               <option value="02">02 - February</option>
               <option value="03">03 - March</option>
-              <option value="04" selected>04 - April</option>
+              <option value="04">04 - April</option>
               <option value="05">05 - May</option>
               <option value="06">06 - June</option>
               <option value="07">07 - July</option>
@@ -317,10 +318,12 @@
           <div class="config-field">
             <label for="import-year-select">Financial Year:</label>
             <select id="import-year-select" class="config-select" onchange="onIngestionParamChange()">
-              <option value="2024">2024</option>
-              <option value="2025" selected>2025</option>
+              <option value="2025-26" selected>2025-26 (Current FY)</option>
+              <option value="2024-25">2024-25</option>
+              <option value="2023-24">2023-24</option>
+              <option value="2025">2025</option>
               <option value="2026">2026</option>
-              <option value="2027">2027</option>
+              <option value="ALL">ALL — All Financial Years</option>
             </select>
           </div>
           <div class="config-field" style="display: flex; gap: 8px;">
@@ -379,11 +382,19 @@
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
-        <div style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
-          <strong>Reconciling:</strong> 
-          <span class="badge badge-info">File 02: Voucher Detail - Details Headwise</span> 
-          with 
-          <span class="badge badge-success">File 06: VLC COMPAY (Reference Dataset)</span><br>
+        <div id="gross-recon-callout" style="background: rgba(29, 78, 216, 0.04); border: 1px solid rgba(29, 78, 216, 0.15); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+            <div>
+              <strong>Reconciling:</strong> 
+              <span class="badge badge-info" id="badge-gross-f2-title">File 02: Voucher Detail - Details Headwise</span> 
+              with 
+              <span class="badge badge-success" id="badge-gross-f6-title">File 06: VLC COMPAY (Reference Dataset)</span>
+            </div>
+            <div id="gross-unique-vouchers-pill" style="display: flex; gap: 8px;">
+              <span class="badge badge-info" id="badge-gross-f2-count">File 02: - Vouchers</span>
+              <span class="badge badge-success" id="badge-gross-f6-count">File 06: - Vouchers</span>
+            </div>
+          </div>
           <span style="color: var(--text-muted);">
             • <strong>Comparison Formula:</strong> <code>Gross Diff = File 2 Passed Gross − File 6 COMPAY Posted Gross</code>.<br>
             • <strong>Short Form Definition:</strong> <strong>PT = Professional Tax</strong> (deducted under Major Head <code>0028</code>). When PT or departmental recoveries (MH <code>0070</code>) are netted from gross expenditure in AG compilation, the voucher matches after netting adjustment.
@@ -627,15 +638,53 @@
           <table>
             <thead>
               <tr>
-                <th class="sortable" onclick="sortRefundTable('source_file')">Source File <span class="sort-arrow" id="sort-refund-source_file">↕</span></th>
-                <th class="center-col sortable" onclick="sortRefundTable('vou_no')">Vou No <span class="sort-arrow" id="sort-refund-vou_no">↕</span></th>
-                <th class="center-col sortable" onclick="sortRefundTable('vou_date')">Date <span class="sort-arrow" id="sort-refund-vou_date">↕</span></th>
-                <th class="sortable" onclick="sortRefundTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-refund-ddo_cd">↕</span></th>
-                <th class="center-col sortable" onclick="sortRefundTable('head')">Classification Head <span class="sort-arrow" id="sort-refund-head">↕</span></th>
-                <th class="sortable" onclick="sortRefundTable('head_desc')">Major Head / Description <span class="sort-arrow" id="sort-refund-head_desc">↕</span></th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('source_file')">Source File <span class="sort-arrow" id="sort-refund-source_file">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-source_file" onclick="openExcelFilter(event, 'refunds', 'source_file')" title="Filter by Source File">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('vou_no')">Vou No <span class="sort-arrow" id="sort-refund-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-vou_no" onclick="openExcelFilter(event, 'refunds', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('vou_date')">Date <span class="sort-arrow" id="sort-refund-vou_date">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-vou_date" onclick="openExcelFilter(event, 'refunds', 'vou_date')" title="Filter by Date">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-refund-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-ddo_cd" onclick="openExcelFilter(event, 'refunds', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('head')">Classification Head <span class="sort-arrow" id="sort-refund-head">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-head" onclick="openExcelFilter(event, 'refunds', 'head')" title="Filter by Classification Head">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('head_desc')">Major Head / Description <span class="sort-arrow" id="sort-refund-head_desc">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-head_desc" onclick="openExcelFilter(event, 'refunds', 'head_desc')" title="Filter by Description">⛛</button>
+                  </div>
+                </th>
                 <th class="num-col sortable" onclick="sortRefundTable('amount')">Amount (₹) <span class="sort-arrow" id="sort-refund-amount">↕</span></th>
-                <th class="center-col sortable" onclick="sortRefundTable('category')">Refund Category <span class="sort-arrow" id="sort-refund-category">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortRefundTable('category')">Refund Category <span class="sort-arrow" id="sort-refund-category">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-refunds-category" onclick="openExcelFilter(event, 'refunds', 'category')" title="Filter by Category">⛛</button>
+                  </div>
+                </th>
                 <th>Statutory Accounting Treatment & Rationale</th>
+              </tr>
+              <tr class="table-top-total-row" id="refunds-top-total-row">
+                <!-- Dynamically populated -->
               </tr>
             </thead>
             <tbody id="refund-table-body">
@@ -650,10 +699,18 @@
     <div id="pane-gross-net-val" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>➕ Gross = Net + Deductions Arithmetic Validation (Voucher Details [File 01])</span>
-          <button class="btn-success btn-sm" onclick="triggerExport('excel', 'val_f1')">
-            <span>📊</span> Export Voucher Details Validation (Excel)
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>➕ Gross = Net + Deductions Arithmetic Validation (Voucher Details [File 01])</span>
+            <span class="badge badge-info" id="val-f1-badge">All Vouchers</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-success btn-sm" onclick="triggerExport('excel', 'val_f1')">
+              <span>📊</span> Export Voucher Details Validation (Excel)
+            </button>
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('f1')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
@@ -666,19 +723,52 @@
           </span>
         </div>
 
+        <div class="filter-bar">
+          <input type="text" id="f1-search" class="search-box" placeholder="Search by Voucher No, MHCD, DDO, Amount..." oninput="onF1Search()">
+          <div class="pill-group" id="f1-pill-group">
+            <button class="pill active" onclick="setF1Filter('ALL')">All Records</button>
+            <button class="pill" onclick="setF1Filter('BALANCED')">Balanced (Gross = Net + Ded)</button>
+            <button class="pill" onclick="setF1Filter('DIFF')">Arithmetic Variance (Δ ≠ 0)</button>
+          </div>
+          <div id="f1-active-filters" style="display: none;"></div>
+        </div>
+
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">MHCD</th>
-                <th class="center-col">Vou No</th>
-                <th>DDO Code</th>
-                <th class="num-col">File 01: Gross (₹)</th>
-                <th class="num-col">File 03: AG Ded (₹)</th>
-                <th class="num-col">File 04: NON AG Ded (₹)</th>
-                <th class="num-col">File 01: Net Amount (₹)</th>
-                <th class="num-col">Arithmetic Diff (₹)</th>
-                <th class="center-col">Validation Status</th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortF1Table('mhcd')">MHCD <span class="sort-arrow" id="sort-f1-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-f1-mhcd" onclick="openExcelFilter(event, 'f1', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortF1Table('vou_no')">Vou No <span class="sort-arrow" id="sort-f1-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-f1-vou_no" onclick="openExcelFilter(event, 'f1', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortF1Table('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-f1-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-f1-ddo_cd" onclick="openExcelFilter(event, 'f1', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
+                <th class="num-col sortable" onclick="sortF1Table('sop_gross')">File 01: Gross (₹) <span class="sort-arrow" id="sort-f1-sop_gross">↕</span></th>
+                <th class="num-col sortable" onclick="sortF1Table('ag_ded')">File 03: AG Ded (₹) <span class="sort-arrow" id="sort-f1-ag_ded">↕</span></th>
+                <th class="num-col sortable" onclick="sortF1Table('try_ded')">File 04: NON AG Ded (₹) <span class="sort-arrow" id="sort-f1-try_ded">↕</span></th>
+                <th class="num-col sortable" onclick="sortF1Table('file1_net')">File 01: Net Amount (₹) <span class="sort-arrow" id="sort-f1-file1_net">↕</span></th>
+                <th class="num-col sortable" onclick="sortF1Table('diff')">Arithmetic Diff (₹) <span class="sort-arrow" id="sort-f1-diff">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortF1Table('status')">Validation Status <span class="sort-arrow" id="sort-f1-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-f1-status" onclick="openExcelFilter(event, 'f1', 'status')" title="Filter by Status">⛛</button>
+                  </div>
+                </th>
+              </tr>
+              <tr class="table-top-total-row" id="f1-top-total-row">
+                <!-- Dynamically populated -->
               </tr>
             </thead>
             <tbody id="val-f1-table-body">
@@ -693,10 +783,18 @@
     <div id="pane-net-recon" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>💳 Net Amount Reconciliation (Voucher Details [File 01] vs. Voucher Summary [File 05])</span>
-          <button class="btn-success btn-sm" onclick="triggerExport('excel', 'net_recon')">
-            <span>📊</span> Export Net Recon (Excel)
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>💳 Net Amount Reconciliation (Voucher Details [File 01] vs. Voucher Summary [File 05])</span>
+            <span class="badge badge-info" id="net-recon-badge">All Vouchers</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-success btn-sm" onclick="triggerExport('excel', 'net_recon')">
+              <span>📊</span> Export Net Recon (Excel)
+            </button>
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('net')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
@@ -711,17 +809,50 @@
           </span>
         </div>
 
+        <div class="filter-bar">
+          <input type="text" id="net-search" class="search-box" placeholder="Search by Voucher No, MHCD, DDO, Net Amount..." oninput="onNetSearch()">
+          <div class="pill-group" id="net-pill-group">
+            <button class="pill active" onclick="setNetFilter('ALL')">All Records</button>
+            <button class="pill" onclick="setNetFilter('MATCH')">Exact Match</button>
+            <button class="pill" onclick="setNetFilter('MISMATCH')">Net Discrepancy</button>
+          </div>
+          <div id="net-active-filters" style="display: none;"></div>
+        </div>
+
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">MHCD</th>
-                <th class="center-col">Vou No</th>
-                <th>DDO Code</th>
-                <th class="num-col">File 01: Bill Net (₹)</th>
-                <th class="num-col">File 05: Net SOP (₹)</th>
-                <th class="num-col">Net Diff (₹)</th>
-                <th class="center-col">Status</th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortNetTable('mhcd')">MHCD <span class="sort-arrow" id="sort-net-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-net-mhcd" onclick="openExcelFilter(event, 'net', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortNetTable('vou_no')">Vou No <span class="sort-arrow" id="sort-net-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-net-vou_no" onclick="openExcelFilter(event, 'net', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortNetTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-net-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-net-ddo_cd" onclick="openExcelFilter(event, 'net', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
+                <th class="num-col sortable" onclick="sortNetTable('file1_net')">File 01: Bill Net (₹) <span class="sort-arrow" id="sort-net-file1_net">↕</span></th>
+                <th class="num-col sortable" onclick="sortNetTable('file5_net')">File 05: Net SOP (₹) <span class="sort-arrow" id="sort-net-file5_net">↕</span></th>
+                <th class="num-col sortable" onclick="sortNetTable('diff')">Net Diff (₹) <span class="sort-arrow" id="sort-net-diff">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortNetTable('status')">Status <span class="sort-arrow" id="sort-net-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-net-status" onclick="openExcelFilter(event, 'net', 'status')" title="Filter by Status">⛛</button>
+                  </div>
+                </th>
+              </tr>
+              <tr class="table-top-total-row" id="net-top-total-row">
+                <!-- Dynamically populated -->
               </tr>
             </thead>
             <tbody id="net-recon-table-body">
@@ -736,10 +867,18 @@
     <div id="pane-ag-ded" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>📑 AG Deductions Analysis (AG Deduction [File 03] vs. Voucher Details [File 01] & VLC COMPAY [File 06])</span>
-          <button class="btn-success btn-sm" onclick="triggerExport('excel', 'ag_ded')">
-            <span>📊</span> Export AG Deductions (Excel)
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>📑 AG Deductions Analysis (AG Deduction [File 03] vs. Voucher Details [File 01] & VLC COMPAY [File 06])</span>
+            <span class="badge badge-info" id="ag-ded-badge">All Deductions</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-success btn-sm" onclick="triggerExport('excel', 'ag_ded')">
+              <span>📊</span> Export AG Deductions (Excel)
+            </button>
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('ag_ded')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
@@ -755,16 +894,56 @@
           </span>
         </div>
 
+        <div class="filter-bar">
+          <input type="text" id="ag-ded-search" class="search-box" placeholder="Search by Voucher No, Head, Description, Treatment..." oninput="onAgDedSearch()">
+          <div class="pill-group" id="ag-ded-pill-group">
+            <button class="pill active" onclick="setAgDedFilter('ALL')">All Deductions</button>
+            <button class="pill" onclick="setAgDedFilter('8009')">GPF Deductions (8009)</button>
+            <button class="pill" onclick="setAgDedFilter('0070')">Recoveries (0070)</button>
+            <button class="pill" onclick="setAgDedFilter('6075')">Loans (6075 / 7610)</button>
+            <button class="pill" onclick="setAgDedFilter('OTHER')">Other Heads</button>
+          </div>
+          <div id="ag-ded-active-filters" style="display: none;"></div>
+        </div>
+
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">Service MHCD</th>
-                <th class="center-col">Vou No</th>
-                <th class="center-col">Deduction MHCD</th>
-                <th>Deduction Head Description</th>
-                <th class="num-col">File 03: Ded Amount (₹)</th>
-                <th>Accounting Treatment in File 06 (COMPAY)</th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortAgDedTable('service_mhcd')">Service MHCD <span class="sort-arrow" id="sort-ag-ded-service_mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-ag_ded-service_mhcd" onclick="openExcelFilter(event, 'ag_ded', 'service_mhcd')" title="Filter by Service Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortAgDedTable('vou_no')">Vou No <span class="sort-arrow" id="sort-ag-ded-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-ag_ded-vou_no" onclick="openExcelFilter(event, 'ag_ded', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortAgDedTable('ded_mhcd')">Deduction MHCD <span class="sort-arrow" id="sort-ag-ded-ded_mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-ag_ded-ded_mhcd" onclick="openExcelFilter(event, 'ag_ded', 'ded_mhcd')" title="Filter by Deduction Major Head">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortAgDedTable('ded_desc')">Deduction Head Description <span class="sort-arrow" id="sort-ag-ded-ded_desc">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-ag_ded-ded_desc" onclick="openExcelFilter(event, 'ag_ded', 'ded_desc')" title="Filter by Description">⛛</button>
+                  </div>
+                </th>
+                <th class="num-col sortable" onclick="sortAgDedTable('amount')">File 03: Ded Amount (₹) <span class="sort-arrow" id="sort-ag-ded-amount">↕</span></th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortAgDedTable('treatment')">Accounting Treatment in File 06 (COMPAY) <span class="sort-arrow" id="sort-ag-ded-treatment">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-ag_ded-treatment" onclick="openExcelFilter(event, 'ag_ded', 'treatment')" title="Filter by Treatment">⛛</button>
+                  </div>
+                </th>
+              </tr>
+              <tr class="table-top-total-row" id="ag-ded-top-total-row">
+                <!-- Dynamically populated -->
               </tr>
             </thead>
             <tbody id="ag-ded-table-body">
@@ -779,10 +958,18 @@
     <div id="pane-non-ag-ded" class="content-pane">
       <div class="panel">
         <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>📑 NON AG Deductions Analysis (NON AG Deduction [File 04] vs. Voucher Details [File 01])</span>
-          <button class="btn-success btn-sm" onclick="triggerExport('excel', 'non_ag_ded')">
-            <span>📊</span> Export NON AG Deductions (Excel)
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>📑 NON AG Deductions Analysis (NON AG Deduction [File 04] vs. Voucher Details [File 01])</span>
+            <span class="badge badge-info" id="try-ded-badge">All Deductions</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-success btn-sm" onclick="triggerExport('excel', 'non_ag_ded')">
+              <span>📊</span> Export NON AG Deductions (Excel)
+            </button>
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('try_ded')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
         </div>
 
         <!-- Scope & Reconciliation Mapping Callout -->
@@ -799,16 +986,56 @@
           </span>
         </div>
 
+        <div class="filter-bar">
+          <input type="text" id="try-ded-search" class="search-box" placeholder="Search by Voucher No, Head, Description, Handling..." oninput="onTryDedSearch()">
+          <div class="pill-group" id="try-ded-pill-group">
+            <button class="pill active" onclick="setTryDedFilter('ALL')">All Deductions</button>
+            <button class="pill" onclick="setTryDedFilter('0028')">Professional Tax (0028)</button>
+            <button class="pill" onclick="setTryDedFilter('8011')">GIS / Insurance (8011/0216)</button>
+            <button class="pill" onclick="setTryDedFilter('8658')">Suspense / TDS (8658)</button>
+            <button class="pill" onclick="setTryDedFilter('OTHER')">Other Heads</button>
+          </div>
+          <div id="try-ded-active-filters" style="display: none;"></div>
+        </div>
+
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">Service MHCD</th>
-                <th class="center-col">Vou No</th>
-                <th class="center-col">Deduction MHCD</th>
-                <th>Deduction Description</th>
-                <th class="num-col">File 04: Ded Amount (₹)</th>
-                <th>Treasury Handling</th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortTryDedTable('service_mhcd')">Service MHCD <span class="sort-arrow" id="sort-try-ded-service_mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-try_ded-service_mhcd" onclick="openExcelFilter(event, 'try_ded', 'service_mhcd')" title="Filter by Service Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortTryDedTable('vou_no')">Vou No <span class="sort-arrow" id="sort-try-ded-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-try_ded-vou_no" onclick="openExcelFilter(event, 'try_ded', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortTryDedTable('ded_mhcd')">Deduction MHCD <span class="sort-arrow" id="sort-try-ded-ded_mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-try_ded-ded_mhcd" onclick="openExcelFilter(event, 'try_ded', 'ded_mhcd')" title="Filter by Deduction Major Head">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortTryDedTable('ded_desc')">Deduction Description <span class="sort-arrow" id="sort-try-ded-ded_desc">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-try_ded-ded_desc" onclick="openExcelFilter(event, 'try_ded', 'ded_desc')" title="Filter by Description">⛛</button>
+                  </div>
+                </th>
+                <th class="num-col sortable" onclick="sortTryDedTable('amount')">File 04: Ded Amount (₹) <span class="sort-arrow" id="sort-try-ded-amount">↕</span></th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortTryDedTable('treatment')">Treasury Handling <span class="sort-arrow" id="sort-try-ded-treatment">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-try_ded-treatment" onclick="openExcelFilter(event, 'try_ded', 'treatment')" title="Filter by Handling">⛛</button>
+                  </div>
+                </th>
+              </tr>
+              <tr class="table-top-total-row" id="try-ded-top-total-row">
+                <!-- Dynamically populated -->
               </tr>
             </thead>
             <tbody id="try-ded-table-body">
@@ -868,6 +1095,7 @@
     </div>
 
     <!-- SECTION 11: Exceptions and Discrepancies -->
+    <!-- SECTION 11: Exceptions and Discrepancies -->
     <div id="pane-exceptions" class="content-pane">
       <!-- Executive Variance Summary Card -->
       <div class="panel" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(30, 58, 138, 0.08) 100%); border-left: 4px solid var(--primary);">
@@ -877,7 +1105,7 @@
               📋 Statutory Audit Exceptions & Accounting Discrepancy Breakdown
             </h3>
             <div style="font-size: 0.82rem; color: var(--text-muted);" id="exc-summary-sub">
-              Detailed registers of vouchers explaining all structural reconciliation variances between Treasury and AG VLC compilation.
+              Detailed registers explaining all structural reconciliation variances and individual voucher discrepancies between Treasury and AG VLC compilation.
             </div>
           </div>
           <div style="display: flex; gap: 8px;">
@@ -891,27 +1119,157 @@
         </div>
       </div>
 
-      <!-- Section 1: Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits MH 8443 / Uncompiled Payments) -->
-      <div class="panel" style="border-left: 4px solid var(--warning);" id="exc-missing-compay-panel">
-        <div class="panel-title" style="color: var(--warning); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span id="exc-missing-compay-title">📂 Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits & Uncompiled Payments)</span>
-          <span class="badge badge-warning" id="exc-missing-compay-badge">0 Vouchers</span>
+      <!-- Section 0: Statutory Grand Tally Discrepancy Breakdown & Reconciliation Bridge -->
+      <div class="panel" style="border-left: 4px solid var(--primary);" id="exc-tally-bridge-panel">
+        <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <span id="exc-tally-bridge-title">⚖️ Statutory Grand Tally Reconciliation Bridge & Discrepancy Derivation</span>
+          <span class="badge badge-success" id="exc-tally-bridge-badge">100% Parity Bridge</span>
         </div>
-        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-missing-compay-desc">
-          These vouchers were authorized and disbursed by the District Treasury in the Schedule of Payments (SOP), but are omitted from VLC COMPAY Consolidated Fund expenditure payments (e.g., compiled in separate Deposits & Advances broadsheets).
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;">
+          Mathematical reconciliation bridge establishing parity between IFMIS Treasury expenditure and VLC COMPAY payments after accounting for statutory accounting treatments.
         </p>
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">Major Head</th>
-                <th class="center-col">Voucher No</th>
-                <th>DDO Code</th>
+                <th class="center-col" style="width: 50px;">Step</th>
+                <th>Accounting Item / Statutory Classification Bridge</th>
+                <th class="center-col" style="width: 60px;">Sign</th>
+                <th class="num-col" style="width: 170px;">Amount (₹)</th>
+                <th>Statutory Audit Impact & Layman Rationale</th>
+              </tr>
+            </thead>
+            <tbody id="exc-grand-tally-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section 0B: Raw Discrepancy & Unmatched Vouchers Register -->
+      <div class="panel" style="border-left: 4px solid var(--danger);" id="exc-mismatch-panel">
+        <div class="panel-title" style="color: var(--danger); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="exc-mismatch-title">🚨 Voucher Gross Discrepancies & Variances</span>
+            <span class="badge badge-danger" id="exc-mismatch-badge">0 Vouchers</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('exc_mismatch')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
+        </div>
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-mismatch-desc">
+          Individual vouchers exhibiting gross amount differences or unlinked compilation records requiring Treasury Officer examination.
+        </p>
+        <div class="filter-bar">
+          <input type="text" id="exc-mismatch-search" class="search-box" placeholder="Search by Voucher No, Major Head, DDO..." oninput="onExcMismatchSearch()">
+          <div class="pill-group" id="exc-mismatch-pill-group">
+            <button class="pill active" onclick="setExcMismatchFilter('ALL')">All Discrepancies</button>
+            <button class="pill" onclick="setExcMismatchFilter('MISMATCH')">Raw Mismatches</button>
+            <button class="pill" onclick="setExcMismatchFilter('MISSING_IN_COMPAY')">Missing in COMPAY</button>
+            <button class="pill" onclick="setExcMismatchFilter('LOAN_CREDIT')">Loan Credit</button>
+          </div>
+          <div id="exc-mismatch-active-filters" style="display: none;"></div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMismatchTable('mhcd')">Major Head <span class="sort-arrow" id="sort-exc-mismatch-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_mismatch-mhcd" onclick="openExcelFilter(event, 'exc_mismatch', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMismatchTable('vou_no')">Voucher No <span class="sort-arrow" id="sort-exc-mismatch-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_mismatch-vou_no" onclick="openExcelFilter(event, 'exc_mismatch', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMismatchTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-exc-mismatch-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_mismatch-ddo_cd" onclick="openExcelFilter(event, 'exc_mismatch', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
                 <th class="center-col">Token No</th>
                 <th class="center-col">Bill Date</th>
-                <th class="num-col">SOP Gross (₹)</th>
-                <th class="num-col">SOP Net (₹)</th>
-                <th class="center-col">Classification Status</th>
+                <th class="num-col sortable" onclick="sortExcMismatchTable('sop_gross')">SOP Gross (₹) <span class="sort-arrow" id="sort-exc-mismatch-sop_gross">↕</span></th>
+                <th class="num-col sortable" onclick="sortExcMismatchTable('compay_gross')">COMPAY Gross (₹) <span class="sort-arrow" id="sort-exc-mismatch-compay_gross">↕</span></th>
+                <th class="num-col sortable" onclick="sortExcMismatchTable('diff')">Variance (₹) <span class="sort-arrow" id="sort-exc-mismatch-diff">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMismatchTable('status')">Status <span class="sort-arrow" id="sort-exc-mismatch-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_mismatch-status" onclick="openExcelFilter(event, 'exc_mismatch', 'status')" title="Filter by Status">⛛</button>
+                  </div>
+                </th>
+                <th>Audit Finding / Discrepancy Note</th>
+              </tr>
+              <tr class="table-top-total-row" id="exc-mismatch-top-total">
+                <!-- Dynamically populated -->
+              </tr>
+            </thead>
+            <tbody id="exceptions-mismatch-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section 1: Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits MH 8443 / Uncompiled Payments) -->
+      <div class="panel" style="border-left: 4px solid var(--warning);" id="exc-missing-compay-panel">
+        <div class="panel-title" style="color: var(--warning); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="exc-missing-compay-title">📂 Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits & Uncompiled Payments)</span>
+            <span class="badge badge-warning" id="exc-missing-compay-badge">0 Vouchers</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('exc_missing_compay')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
+        </div>
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-missing-compay-desc">
+          These vouchers were authorized and disbursed by the District Treasury in the Schedule of Payments (SOP), but are omitted from VLC COMPAY Consolidated Fund expenditure payments (e.g., compiled in separate Deposits & Advances broadsheets).
+        </p>
+        <div class="filter-bar">
+          <input type="text" id="exc-missing-compay-search" class="search-box" placeholder="Search by Voucher No, Major Head, DDO..." oninput="onExcMissingCompaySearch()">
+          <div id="exc-missing-compay-active-filters" style="display: none;"></div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingCompayTable('mhcd')">Major Head <span class="sort-arrow" id="sort-exc-compay-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_compay-mhcd" onclick="openExcelFilter(event, 'exc_missing_compay', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingCompayTable('vou_no')">Voucher No <span class="sort-arrow" id="sort-exc-compay-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_compay-vou_no" onclick="openExcelFilter(event, 'exc_missing_compay', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingCompayTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-exc-compay-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_compay-ddo_cd" onclick="openExcelFilter(event, 'exc_missing_compay', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">Token No</th>
+                <th class="center-col">Bill Date</th>
+                <th class="num-col sortable" onclick="sortExcMissingCompayTable('sop_gross')">SOP Gross (₹) <span class="sort-arrow" id="sort-exc-compay-sop_gross">↕</span></th>
+                <th class="num-col sortable" onclick="sortExcMissingCompayTable('file1_net')">SOP Net (₹) <span class="sort-arrow" id="sort-exc-compay-file1_net">↕</span></th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingCompayTable('status')">Classification Status <span class="sort-arrow" id="sort-exc-compay-status">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_compay-status" onclick="openExcelFilter(event, 'exc_missing_compay', 'status')" title="Filter by Status">⛛</button>
+                  </div>
+                </th>
                 <th>Statutory Audit Impact & Justification</th>
               </tr>
               <tr class="table-top-total-row" id="exc-missing-compay-top-total">
@@ -928,21 +1286,47 @@
       <!-- Section 2: Missing High-Value Vouchers in SOP Export (e.g. MH 4801 Energy in Oct) -->
       <div class="panel" style="border-left: 4px solid var(--danger);" id="exc-missing-sop-panel">
         <div class="panel-title" style="color: var(--danger); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span id="exc-missing-sop-title">🚨 High-Value Capital Vouchers in COMPAY Omitted from Treasury SOP Export (MH 4801)</span>
-          <span class="badge badge-danger" id="exc-missing-sop-badge">0 Vouchers</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="exc-missing-sop-title">🚨 High-Value Capital Vouchers in COMPAY Omitted from Treasury SOP Export (MH 4801)</span>
+            <span class="badge badge-danger" id="exc-missing-sop-badge">0 Vouchers</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('exc_missing_sop')">
+              <span>🔄</span> Reset Filters
+            </button>
+          </div>
         </div>
         <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;" id="exc-missing-sop-desc">
           These payment vouchers are present in the AG Compilation file but were skipped in the Treasury SOP export files (e.g., processed at Secretariat level via Letter of Credit / direct book transfer).
         </p>
+        <div class="filter-bar">
+          <input type="text" id="exc-missing-sop-search" class="search-box" placeholder="Search by Voucher No, Major Head, DDO..." oninput="onExcMissingSopSearch()">
+          <div id="exc-missing-sop-active-filters" style="display: none;"></div>
+        </div>
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th class="center-col">Major Head</th>
-                <th class="center-col">Voucher No</th>
-                <th>DDO Code</th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingSopTable('mhcd')">Major Head <span class="sort-arrow" id="sort-exc-sop-mhcd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_sop-mhcd" onclick="openExcelFilter(event, 'exc_missing_sop', 'mhcd')" title="Filter by Major Head">⛛</button>
+                  </div>
+                </th>
+                <th class="center-col">
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingSopTable('vou_no')">Voucher No <span class="sort-arrow" id="sort-exc-sop-vou_no">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_sop-vou_no" onclick="openExcelFilter(event, 'exc_missing_sop', 'vou_no')" title="Filter by Voucher No">⛛</button>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-header-wrap">
+                    <span class="sortable" onclick="sortExcMissingSopTable('ddo_cd')">DDO Code <span class="sort-arrow" id="sort-exc-sop-ddo_cd">↕</span></span>
+                    <button class="col-filter-btn" id="filter-btn-exc_missing_sop-ddo_cd" onclick="openExcelFilter(event, 'exc_missing_sop', 'ddo_cd')" title="Filter by DDO Code">⛛</button>
+                  </div>
+                </th>
                 <th class="center-col">Bill Date</th>
-                <th class="num-col">Amount (₹)</th>
+                <th class="num-col sortable" onclick="sortExcMissingSopTable('compay_gross')">Amount (₹) <span class="sort-arrow" id="sort-exc-sop-compay_gross">↕</span></th>
                 <th>Audit Impact / Statutory Rule</th>
               </tr>
               <tr class="table-top-total-row" id="exc-missing-sop-top-total">
@@ -1069,7 +1453,10 @@
     <!-- SECTION 11: Settings & Configuration (Consolidated) -->
     <div id="pane-settings" class="content-pane">
       <div class="tab-pills">
-        <button class="tab-pill active" onclick="switchSettingsTab('matching-rules')" id="tab-btn-matching-rules">
+        <button class="tab-pill active" onclick="switchSettingsTab('active-modules')" id="tab-btn-active-modules">
+          <span>🎚️</span> Active Checks & Modules
+        </button>
+        <button class="tab-pill" onclick="switchSettingsTab('matching-rules')" id="tab-btn-matching-rules">
           <span>⚙️</span> Matching Rules & Keys
         </button>
         <button class="tab-pill" onclick="switchSettingsTab('column-mapping')" id="tab-btn-column-mapping">
@@ -1083,8 +1470,180 @@
         </button>
       </div>
 
+      <!-- Subtab 0: Active Reconciliation Checks & Module Toggles -->
+      <div id="subtab-active-modules" class="subtab-pane active">
+        <div class="panel">
+          <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span>🎚️ Statutory Check Selector & Module Visibility</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-primary btn-sm" onclick="setPresetModules('primary_only')" title="Enable only Primary Gross vs COMPAY (0001–5999)">
+                <span>⚡</span> Primary Check Only (Default)
+              </button>
+              <button class="btn-secondary btn-sm" onclick="setPresetModules('all_enabled')" title="Enable all secondary checks and deduction registers">
+                <span>✅</span> Enable All Checks
+              </button>
+              <button class="btn-secondary btn-sm" onclick="setPresetModules('reset')" title="Reset to statutory default configuration">
+                <span>🔄</span> Reset
+              </button>
+            </div>
+          </div>
+
+          <p style="font-size: 0.83rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+            Control which reconciliation checks and workbench tabs are active. By statutory accounting convention, the 
+            <strong>Primary Check: Gross vs COMPAY (File 02 vs File 06 COMPAY)</strong> is strictly restricted to 
+            <strong>Major Heads 0001 to 5999 (Consolidated Fund)</strong>. Secondary arithmetic and deduction tabs are hidden by default to keep the audit workflow streamlined.
+          </p>
+
+          <!-- Primary Core Check Card -->
+          <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); border-left: 4px solid var(--success); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap;">
+                  <strong style="font-size: 0.96rem; color: var(--text-main);">Primary Statutory Check: Gross vs COMPAY (File 02 vs File 06)</strong>
+                  <span class="badge badge-success" style="font-size: 0.72rem; letter-spacing: 0.5px;">ALWAYS ACTIVE (MANDATORY)</span>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+                  Performs exact rupee-to-rupee matching of Treasury gross expenditure against VLC compiled payments (File 02 Detailed Headwise vs. File 06 VLC COMPAY).
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; margin-top: 10px;">
+              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.84rem;">
+                <input type="checkbox" id="toggle-scope-0001-5999" checked onchange="onModuleToggleChange()" style="margin-top: 2px; transform: scale(1.15);">
+                <div>
+                  <strong style="color: var(--primary);">Filter Scope: Only consider Major Heads from 0001 to 5999 (Consolidated Fund)</strong>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">
+                    Restricts comparison to Revenue and Capital expenditure heads (0001–5999). Excludes Public Account heads (8000+ such as GPF 8009, Civil Deposits 8443, Suspense 8658, Remittances 8782) and Public Debt/Loans (6000+) from primary Gross parity.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Secondary Checks Section -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin-bottom: 4px;">
+              Secondary Audit Checks & Workspaces (Disabled / Hidden by Default)
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">
+              Enabling any toggle immediately displays its dedicated tab in the left sidebar navigation and includes its verification in the reconciliation pipeline:
+            </div>
+
+            <!-- Toggle A: Bill Gross -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>➕ a. Bill Gross–Net Arithmetic Validation (File 01)</span>
+                  <span class="badge badge-secondary" id="badge-toggle-bill-gross">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Audits Bill Master equation (<code>Gross Amount − AG Deductions − Treasury Deductions = Net Amount</code>) for every passed voucher.
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-bill-gross" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Toggle B: Net Bank SOP -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>💳 b. Net Bank SOP Reconciliation (File 01 vs File 05)</span>
+                  <span class="badge badge-secondary" id="badge-toggle-net-bank-sop">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Verifies that Net Amount on passed bills matches electronic Bank Payment SOP disbursement schedules (File 01 vs. File 05).
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-net-bank-sop" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Toggle C: AG Deduction -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>📑 c. AG Deductions Schedule Analysis (File 03 GPF & Recoveries)</span>
+                  <span class="badge badge-secondary" id="badge-toggle-ag-ded">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Itemized schedule ledger for statutory deductions credited directly to AG accounts (GPF Major Head 8009, Recoveries 0070, Loans 7610).
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-ag-ded" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Toggle D: NON AG Deduction -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>📑 d. NON AG Deductions Analysis (File 04 TDS, PT & GIS)</span>
+                  <span class="badge badge-secondary" id="badge-toggle-non-ag-ded">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Analyzes non-AG deductions withheld at Treasury level (TDS MH 8658 Suspense, Profession Tax MH 0028, GIS MH 8011/0216).
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-non-ag-ded" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Toggle E: Treasury Deduction -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>🏛️ e. Treasury Deductions Register</span>
+                  <span class="badge badge-secondary" id="badge-toggle-try-ded">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Cross-verifies File 01 Bill Master Treasury Deduction control totals against File 04 itemized schedule sums.
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-try-ded" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Toggle F: Refunds -->
+            <div class="toggle-switch-container">
+              <div class="toggle-switch-info">
+                <div class="toggle-switch-title">
+                  <span>💸 f. Refunds & Deduct-Expenditure Register (Minor Head 900)</span>
+                  <span class="badge badge-secondary" id="badge-toggle-refunds">Disabled</span>
+                </div>
+                <div class="toggle-switch-desc">
+                  Tracks negative voucher lines, advance recoveries (MH 7610 SDCD 012/017), and revenue challan refunds under Minor Head 900.
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-check-refunds" onchange="onModuleToggleChange()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+            <button class="btn-primary" onclick="saveAndApplyModuleSettings()">
+              <span>💾</span> Save & Apply Configuration
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Subtab 1: Matching Rules & Keys -->
-      <div id="subtab-matching-rules" class="subtab-pane active">
+      <div id="subtab-matching-rules" class="subtab-pane">
         <div class="panel">
           <div class="panel-title">⚙️ Configure Voucher Matching Key & Rules</div>
           <div style="display: flex; flex-direction: column; gap: 16px; max-width: 740px;">

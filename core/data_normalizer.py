@@ -9,8 +9,67 @@ import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 TREASURY_MAPPING = {
-    "VAL": "052",
-    "052": "052"
+    # Master Catalog of all 58 Madhya Pradesh Treasuries
+    "BAL": "010", "010": "010",
+    "BAD": "020", "020": "020",
+    "BET": "030", "030": "030",
+    "BHI": "040", "040": "040",
+    "BPL": "050", "050": "050",
+    "VIN": "051", "051": "051",
+    "VAL": "052", "052": "052",
+    "CTB": "054", "054": "054",
+    "CHA": "060", "060": "060",
+    "CHI": "070", "070": "070",
+    "DAM": "080", "080": "080",
+    "DAT": "090", "090": "090",
+    "DEW": "100", "100": "100",
+    "DHA": "110", "110": "110",
+    "DIN": "120", "120": "120",
+    "GUN": "130", "130": "130",
+    "GWL": "140", "140": "140",
+    "MML": "141", "141": "141",
+    "HAR": "150", "150": "150",
+    "HOS": "160", "160": "160",
+    "IND": "170", "170": "170",
+    "INC": "171", "171": "171",
+    "JBP": "180", "180": "180",
+    "JHA": "190", "190": "190",
+    "KAT": "200", "200": "200",
+    "KHA": "210", "210": "210",
+    "KAR": "220", "220": "220",
+    "MAN": "230", "230": "230",
+    "MND": "240", "240": "240",
+    "MOE": "250", "250": "250", "MOR": "250",
+    "NAR": "260", "260": "260",
+    "NEE": "270", "270": "270",
+    "PAN": "280", "280": "280",
+    "RIS": "290", "290": "290",
+    "RAJ": "300", "300": "300",
+    "RAT": "310", "310": "310",
+    "REW": "320", "320": "320",
+    "SAG": "330", "330": "330",
+    "SAT": "340", "340": "340",
+    "SEH": "350", "350": "350",
+    "SEO": "360", "360": "360",
+    "SHA": "370", "370": "370",
+    "SAJ": "380", "380": "380",
+    "SHI": "390", "390": "390",
+    "SHE": "400", "400": "400",
+    "SID": "410", "410": "410",
+    "TIK": "420", "420": "420",
+    "UJJ": "430", "430": "430",
+    "UMA": "440", "440": "440",
+    "VID": "450", "450": "450",
+    "ANU": "460", "460": "460",
+    "ASH": "470", "470": "470",
+    "BUR": "480", "480": "480",
+    "ALI": "490", "490": "490",
+    "SNG": "500", "500": "500",
+    "AGR": "510", "510": "510",
+    "NIW": "520", "520": "520",
+    "MAU": "530", "530": "530",
+    "PDH": "540", "540": "540",
+    "MAI": "550", "550": "550"
 }
 
 class NormalizedRecord:
@@ -127,6 +186,26 @@ class DataNormalizer:
         # Date normalization
         if 'vou_date' in raw_mapped:
             norm['vou_date'] = cls.normalize_date(raw_mapped.get('vou_date', ''))
+
+        # Month and Year normalization
+        if 'month' in raw_mapped and raw_mapped['month']:
+            m_val = cls.normalize_identifier(raw_mapped['month'])
+            norm['month'] = str(int(m_val)) if m_val.isdigit() else m_val
+        if 'year' in raw_mapped and raw_mapped['year']:
+            y_val = cls.normalize_identifier(raw_mapped['year'])
+            if y_val.isdigit():
+                norm['year'] = f"20{y_val}" if len(y_val) == 2 else y_val
+            else:
+                norm['year'] = y_val
+
+        if norm.get('vou_date') and (not norm.get('month') or not norm.get('year')):
+            d_parts = norm['vou_date'].split('-')
+            if len(d_parts) == 3:
+                if not norm.get('month') and d_parts[1].isdigit():
+                    norm['month'] = str(int(d_parts[1]))
+                if not norm.get('year') and d_parts[2].isdigit():
+                    y_part = d_parts[2]
+                    norm['year'] = f"20{y_part}" if len(y_part) == 2 else y_part
 
         # Monetary fields
         money_fields = ['gross_amt', 'net_amt', 'ag_ded_amt', 'try_ded_amt', 'ded_amt']

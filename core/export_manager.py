@@ -34,19 +34,19 @@ class ExportManager:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if not output_path:
             name_map = {
-                "grand_tally": "Grand_Tally_Balance_Sheet",
-                "gross_recon": "Gross_Recon_IFMIS_vs_COMPAY",
+                "grand_tally": "IFMIS_VLC_Grand_Tally_Balance_Sheet",
+                "gross_recon": "IFMIS_VLC_Primary_Gross_Reconciliation_File02_vs_File06",
                 "val_f1": "IFMIS_BillMaster_Gross_Net_Deductions",
-                "net_recon": "Net_Recon_BillMaster_vs_NetSOP",
-                "ag_ded": "AG_Deductions_Schedule",
-                "non_ag_ded": "Treasury_Deductions_Schedule",
-                "cross_file": "Statutory_Cross_File_12_Checks",
-                "exceptions": "Exceptions_Register_MH4801_Uncompiled",
-                "head_wise": "Major_Head_Summary_Tally",
-                "classification_tally": "Classification_Tally_15_Digit",
-                "refunds": "Refund_Vouchers_And_Deduct_Exp"
+                "net_recon": "IFMIS_Net_Reconciliation",
+                "ag_ded": "IFMIS_AG_Deductions_Schedule",
+                "non_ag_ded": "IFMIS_Treasury_Deductions_Schedule",
+                "cross_file": "IFMIS_12_Cross_File_Consistency_Checks",
+                "exceptions": "IFMIS_Exceptions_Register",
+                "head_wise": "IFMIS_Major_Head_Summary_Tally",
+                "classification_tally": "IFMIS_15_Digit_Classification_Tally",
+                "refunds": "IFMIS_Refund_Vouchers_And_Deduct_Exp"
             }
-            prefix = name_map.get(section, "Audit_Reconciliation_Report")
+            prefix = name_map.get(section, "IFMIS_VLC_Reconciliation_Workbook")
             output_path = os.path.join(self.reports_dir, f"{prefix}_{timestamp}.xlsx")
 
         wb = openpyxl.Workbook()
@@ -165,6 +165,34 @@ class ExportManager:
                 ws2.cell(row=row_curr, column=col).font = reg_font
                 ws2.cell(row=row_curr, column=col).border = thin_border
             row_curr += 1
+
+        # Summary / Total row for Primary Gross Reconciliation
+        all_recs = self.results.get('voucher_register', [])
+        ws2.cell(row=row_curr, column=1, value="TOTAL").alignment = align_center
+        ws2.cell(row=row_curr, column=2, value="").alignment = align_center
+        ws2.cell(row=row_curr, column=3, value=f"Count: {len(all_recs)}").alignment = align_center
+        ws2.cell(row=row_curr, column=4, value="").alignment = align_center
+        ws2.cell(row=row_curr, column=5, value="").alignment = align_center
+        ws2.cell(row=row_curr, column=6, value="").alignment = align_left
+
+        tot_sop = sum(v.get('sop_gross', 0) for v in all_recs)
+        tot_cp = sum(v.get('compay_gross', 0) for v in all_recs)
+        tot_diff = tot_sop - tot_cp
+
+        c7 = ws2.cell(row=row_curr, column=7, value=tot_sop)
+        c8 = ws2.cell(row=row_curr, column=8, value=tot_cp)
+        c9 = ws2.cell(row=row_curr, column=9, value=tot_diff)
+        for c in [c7, c8, c9]:
+            c.number_format = curr_fmt
+            c.alignment = align_right
+            c.border = double_border
+
+        st_cell = ws2.cell(row=row_curr, column=10, value="EXACT_PARITY" if abs(tot_diff) < 0.01 else "NET_VARIANCE")
+        st_cell.alignment = align_center
+        st_cell.fill = green_fill if abs(tot_diff) < 0.01 else gold_fill
+        ws2.cell(row=row_curr, column=11, value=f"Summary Parity: Total File 02 = ₹{tot_sop:,.2f}, Total File 06 = ₹{tot_cp:,.2f} across {len(all_recs)} vouchers").alignment = align_left
+        for col in range(1, 12):
+            ws2.cell(row=row_curr, column=col).font = bold_font
 
         # SHEET 3: Major Head Tally
         ws3 = wb.create_sheet(title="Major_Head_Tally")
@@ -414,8 +442,8 @@ class ExportManager:
             "gross_recon": ws2,
             "head_wise": ws3,
             "exceptions": ws4,
-            "val_f1": ws5,
-            "cross_file": ws6,
+            "cross_file": ws5,
+            "val_f1": ws6,
             "net_recon": ws7,
             "ag_ded": ws8,
             "non_ag_ded": ws9,
@@ -445,11 +473,14 @@ class ExportManager:
             self.logger.log_export("EXCEL", output_path, len(self.results.get('voucher_register', [])))
         return output_path
 
-    def export_csv(self, output_path=None, filter_status="ALL", delimiter=","):
+    def export_csv(self, output_path=None, filter_status="ALL", delimiter=",", section=None):
         """Exports voucher reconciliation records to clean CSV preserving text identifiers."""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if not output_path:
-            output_path = os.path.join(self.reports_dir, f"Voucher_Reconciliation_{filter_status}_{timestamp}.csv")
+            if section == "gross_recon":
+                output_path = os.path.join(self.reports_dir, f"IFMIS_VLC_Primary_Gross_Reconciliation_File02_vs_File06_{timestamp}.csv")
+            else:
+                output_path = os.path.join(self.reports_dir, f"Voucher_Reconciliation_{filter_status}_{timestamp}.csv")
 
         vouchers = self.results.get('voucher_register', [])
         if filter_status != "ALL":

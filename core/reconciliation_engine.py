@@ -30,11 +30,22 @@ def format_15_digit_head(r):
     return f"{mh}-{sm}-{mi}-{sh}-{dh}-{sd}-{vc}"
 
 
+def is_consolidated_fund(mhcd):
+    """Returns True if Major Head belongs to Consolidated Fund (0001 to 5999)."""
+    try:
+        n = int(str(mhcd).strip())
+        return 1 <= n <= 5999
+    except (ValueError, TypeError):
+        return False
+
+
 class ComprehensiveReconciliationEngine:
-    def __init__(self, import_manager, key_fields=None, tolerance=Decimal('0.00'), logger=None):
+    def __init__(self, import_manager, key_fields=None, tolerance=Decimal('0.00'), logger=None, mh_scope_consolidated=True, target_month=None):
         self.importer = import_manager
         self.key_fields = key_fields or ["try_cd", "mhcd", "vou_no"]
         self.tolerance = tolerance
+        self.mh_scope_consolidated = mh_scope_consolidated
+        self.target_month = str(target_month).strip() if target_month and str(target_month).strip().upper() != 'ALL' else None
         self.matcher = MatchingEngine(key_fields=self.key_fields, tolerance=self.tolerance)
         self.logger = logger or AuditLogger()
         self.results = None
@@ -52,22 +63,36 @@ class ComprehensiveReconciliationEngine:
         ds6 = datasets.get("file_6")
 
         # 1. Total Computations
-        tot_f1_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
-        tot_f1_ag = sum((r.get('ag_ded_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
-        tot_f1_try = sum((r.get('try_ded_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
-        tot_f1_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
-
-        tot_f2_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds2.records) if ds2 and ds2.is_loaded else Decimal('0.00')
-        tot_f3_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds3.records) if ds3 and ds3.is_loaded else Decimal('0.00')
-        tot_f4_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds4.records) if ds4 and ds4.is_loaded else Decimal('0.00')
-        tot_f5_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds5.records) if ds5 and ds5.is_loaded else Decimal('0.00')
+        if self.mh_scope_consolidated:
+            tot_f1_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds1.records if is_consolidated_fund(r.get('mhcd'))) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_ag = sum((r.get('ag_ded_amt') or Decimal('0.00')) for r in ds1.records if is_consolidated_fund(r.get('mhcd'))) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_try = sum((r.get('try_ded_amt') or Decimal('0.00')) for r in ds1.records if is_consolidated_fund(r.get('mhcd'))) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds1.records if is_consolidated_fund(r.get('mhcd'))) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f2_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds2.records if is_consolidated_fund(r.get('mhcd'))) if ds2 and ds2.is_loaded else Decimal('0.00')
+            tot_f3_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds3.records if is_consolidated_fund(r.get('mhcd'))) if ds3 and ds3.is_loaded else Decimal('0.00')
+            tot_f4_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds4.records if is_consolidated_fund(r.get('mhcd'))) if ds4 and ds4.is_loaded else Decimal('0.00')
+            tot_f5_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds5.records if is_consolidated_fund(r.get('mhcd'))) if ds5 and ds5.is_loaded else Decimal('0.00')
+        else:
+            tot_f1_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_ag = sum((r.get('ag_ded_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_try = sum((r.get('try_ded_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f1_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds1.records) if ds1 and ds1.is_loaded else Decimal('0.00')
+            tot_f2_gross = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds2.records) if ds2 and ds2.is_loaded else Decimal('0.00')
+            tot_f3_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds3.records) if ds3 and ds3.is_loaded else Decimal('0.00')
+            tot_f4_ded = sum((r.get('ded_amt') or Decimal('0.00')) for r in ds4.records) if ds4 and ds4.is_loaded else Decimal('0.00')
+            tot_f5_net = sum((r.get('net_amt') or Decimal('0.00')) for r in ds5.records) if ds5 and ds5.is_loaded else Decimal('0.00')
 
         # COMPAY Payments vs TEs
         cp_payments = [r for r in ds6.records if not r.get('te_no') and r.get('ss_sop') != 'TE'] if ds6 and ds6.is_loaded else []
         cp_tes = [r for r in ds6.records if r.get('te_no') or r.get('ss_sop') == 'TE'] if ds6 and ds6.is_loaded else []
 
         tot_cp_grand = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds6.records) if ds6 and ds6.is_loaded else Decimal('0.00')
-        tot_cp_payments = sum((r.get('gross_amt') or Decimal('0.00')) for r in cp_payments)
+
+        if self.mh_scope_consolidated:
+            tot_cp_payments = sum((r.get('gross_amt') or Decimal('0.00')) for r in cp_payments if is_consolidated_fund('8009' if str(r.get('sec_mhcd') or '').strip() == '8009' else str(r.get('mhcd') or '').strip()))
+        else:
+            tot_cp_payments = sum((r.get('gross_amt') or Decimal('0.00')) for r in cp_payments)
+
         tot_cp_tes = sum((r.get('gross_amt') or Decimal('0.00')) for r in cp_tes)
 
         # Cross-Dataset DDO Enrichment:
@@ -90,14 +115,16 @@ class ComprehensiveReconciliationEngine:
 
         # 3. Multi-Head Consolidation
         # Group File 1 (Bills)
-        f1_map = {self.matcher.build_key(r): r for r in ds1.records} if ds1 and ds1.is_loaded else {}
+        f1_map = {self.matcher.build_key(r): r for r in ds1.records if (not self.mh_scope_consolidated or is_consolidated_fund(r.get('mhcd')))} if ds1 and ds1.is_loaded else {}
         # Group File 5 (Net)
-        f5_map = {self.matcher.build_key(r): r for r in ds5.records} if ds5 and ds5.is_loaded else {}
+        f5_map = {self.matcher.build_key(r): r for r in ds5.records if (not self.mh_scope_consolidated or is_consolidated_fund(r.get('mhcd')))} if ds5 and ds5.is_loaded else {}
 
         # Group File 2 (Gross Classification Lines)
         f2_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'records': []})
         if ds2 and ds2.is_loaded:
             for r in ds2.records:
+                if self.mh_scope_consolidated and not is_consolidated_fund(r.get('mhcd')):
+                    continue
                 k = self.matcher.build_key(r)
                 f2_grp[k]['gross'] += (r.get('gross_amt') or Decimal('0.00'))
                 f2_grp[k]['records'].append(r)
@@ -130,6 +157,9 @@ class ComprehensiveReconciliationEngine:
         for r in cp_payments:
             sec_m = str(r.get('sec_mhcd') or '').strip()
             m = str(r.get('mhcd') or '').strip()
+            effective_m = '8009' if sec_m == '8009' else m
+            if self.mh_scope_consolidated and not is_consolidated_fund(effective_m):
+                continue
             # For comparison of Major Head 8009 with File 2:
             # Gross payment vouchers have sec_mhcd == '8009'.
             # Rows where mhcd == '8009' and sec_mhcd != '8009' are GPF deductions from salary bills (File 3).
@@ -140,7 +170,7 @@ class ComprehensiveReconciliationEngine:
             cp_grp[k]['records'].append(r)
 
         # 4. Master 3-Way Voucher Matcher
-        all_voucher_keys = set(f1_map.keys()) | set(f2_grp.keys()) | set(cp_grp.keys()) | set(f5_map.keys())
+        all_voucher_keys = set(f2_grp.keys()) | set(cp_grp.keys()) | set(f1_map.keys()) | set(f5_map.keys())
         voucher_register = []
 
         status_counts = defaultdict(int)
@@ -151,10 +181,11 @@ class ComprehensiveReconciliationEngine:
             f2_data = f2_grp.get(k, {'gross': Decimal('0.00'), 'records': []})
             cp_data = cp_grp.get(k, {'gross': Decimal('0.00'), 'records': []})
 
-            # Pick representative record for identifiers
             rep = f1_rec or (f2_data['records'][0] if f2_data['records'] else (cp_data['records'][0] if cp_data['records'] else f5_rec))
             try_cd = rep.get('try_cd', '')
             mhcd = rep.get('mhcd', '')
+            if self.mh_scope_consolidated and not is_consolidated_fund(mhcd):
+                continue
             vou_no = rep.get('vou_no', '')
             vou_date = rep.get('vou_date', '')
             ddo_cd = rep.get('ddo_cd', '')
@@ -238,12 +269,15 @@ class ComprehensiveReconciliationEngine:
         f3_recovery_amt = float(sum(f3_rec_grp.values()))
         f3_loan_amt = float(sum(f3_loan_grp.values()))
 
-        reconciled_payments = (float(tot_f2_gross)
-                               - uncompiled_amt
-                               + missing_4801_amt
-                               + f3_8009_amt
-                               - f3_recovery_amt
-                               + f3_loan_amt)
+        if self.mh_scope_consolidated:
+            reconciled_payments = float(tot_f2_gross) + missing_4801_amt
+        else:
+            reconciled_payments = (float(tot_f2_gross)
+                                   - uncompiled_amt
+                                   + missing_4801_amt
+                                   + f3_8009_amt
+                                   - f3_recovery_amt
+                                   + f3_loan_amt)
         payment_discrepancy = reconciled_payments - float(tot_cp_payments)
 
         # Dynamic uncompiled label based on heads present
@@ -336,7 +370,7 @@ class ComprehensiveReconciliationEngine:
         # 9. Deduction Registers Samples
         ag_ded_sample = []
         if ds3 and ds3.is_loaded:
-            for r in ds3.records[:200]:
+            for r in ds3.records:
                 dmh = str(r.get('ded_mhcd') or '')
                 ag_ded_sample.append({
                     "service_mhcd": str(r.get('mhcd') or ''),
@@ -349,7 +383,7 @@ class ComprehensiveReconciliationEngine:
 
         try_ded_sample = []
         if ds4 and ds4.is_loaded:
-            for r in ds4.records[:200]:
+            for r in ds4.records:
                 dmh = str(r.get('ded_mhcd') or '')
                 try_ded_sample.append({
                     "service_mhcd": str(r.get('mhcd') or ''),
@@ -371,6 +405,8 @@ class ComprehensiveReconciliationEngine:
         f2_head_vous = defaultdict(lambda: defaultdict(Decimal))
         if ds2 and ds2.is_loaded:
             for r in ds2.records:
+                if self.mh_scope_consolidated and not is_consolidated_fund(r.get('mhcd')):
+                    continue
                 k = format_15_digit_head(r)
                 g = (r.get('gross_amt') or Decimal('0.00'))
                 f2_heads[k]['gross'] += g
@@ -384,6 +420,9 @@ class ComprehensiveReconciliationEngine:
             for r in cp_payments:
                 sec_m = str(r.get('sec_mhcd') or '').strip()
                 m = str(r.get('mhcd') or '').strip()
+                effective_m = '8009' if sec_m == '8009' else m
+                if self.mh_scope_consolidated and not is_consolidated_fund(effective_m):
+                    continue
                 # For comparison of Major Head 8009 with File 2:
                 # Gross payment lines have sec_mhcd == '8009'.
                 # Records where mhcd == '8009' and sec_mhcd != '8009' are GPF deductions from salary bills (File 3).
@@ -600,7 +639,15 @@ class ComprehensiveReconciliationEngine:
                     if m and y and 1 <= m <= 12 and 2000 <= y <= 2099:
                         period_counter[(m, y)] += 1
 
-        if period_counter:
+        if len(period_counter) > 1:
+            years = sorted(list(set(y for m, y in period_counter.keys())))
+            if len(years) > 1:
+                accounting_period = f"Financial Year {years[0]}-{str(years[-1])[-2:]} ({len(period_counter)} Months)"
+                period_abbr = f"FY {years[0]}-{str(years[-1])[-2:]}"
+            else:
+                accounting_period = f"Year {years[0]} ({len(period_counter)} Months)"
+                period_abbr = f"FY {years[0]}"
+        elif period_counter:
             (best_m, best_y) = max(period_counter.items(), key=lambda x: x[1])[0]
             abbr, full = month_names_map.get(best_m, ('Mon', 'Month'))
             accounting_period = f"{full} {best_y}"
@@ -609,12 +656,19 @@ class ComprehensiveReconciliationEngine:
             accounting_period = "Unknown Period"
             period_abbr = "Unknown"
 
-        top_try = max(try_counter.items(), key=lambda x: x[1])[0] if try_counter else '052'
-        treasury_display = "052 (VAL)" if top_try in ['052', 'VAL'] else top_try
-        treasury_badge_text = f"Treasury: {treasury_display} — {period_abbr}"
+        if len(try_counter) > 1:
+            treasury_display = f"All Treasuries ({len(try_counter)} Statewide)"
+            treasury_badge_text = f"Statewide Consolidated ({len(try_counter)} Treasuries) — {period_abbr}"
+        else:
+            top_try = max(try_counter.items(), key=lambda x: x[1])[0] if try_counter else '052'
+            treasury_display = "052 (VAL)" if top_try in ['052', 'VAL'] else top_try
+            treasury_badge_text = f"Treasury: {treasury_display} — {period_abbr}"
 
         self.results = {
             "run_id": self.logger.run_id,
+            "accounting_period": accounting_period,
+            "treasury_display": treasury_display,
+            "treasury_badge_text": treasury_badge_text,
             "summary": {
                 "compay_grand_total": float(tot_cp_grand),
                 "compay_payment_total": float(tot_cp_payments),
@@ -630,6 +684,8 @@ class ComprehensiveReconciliationEngine:
                 "reconciled_payment_total": reconciled_payments,
                 "payment_discrepancy": payment_discrepancy,
                 "total_vouchers": len(voucher_register),
+                "file_02_unique_vouchers": len(f2_grp),
+                "file_06_unique_vouchers": len(cp_grp),
                 "status_counts": dict(status_counts),
                 "classification_total_heads": len(all_head_keys),
                 "classification_exact_matches": tally_counts.get("EXACT_MATCH", 0),

@@ -35,6 +35,8 @@
       "has_header": false,
       "delimiter": ",",
       "columns": {
+        "0": "month",
+        "1": "year",
         "3": "try_cd",
         "8": "mhcd",
         "9": "vou_no",
@@ -53,6 +55,8 @@
       "has_header": false,
       "delimiter": ",",
       "columns": {
+        "0": "month",
+        "1": "year",
         "2": "try_cd",
         "6": "mhcd",
         "4": "vou_no",
@@ -73,6 +77,8 @@
       "has_header": false,
       "delimiter": ",",
       "columns": {
+        "0": "month",
+        "1": "year",
         "2": "try_cd",
         "4": "mhcd",
         "6": "vou_no",
@@ -87,6 +93,8 @@
       "has_header": false,
       "delimiter": ",",
       "columns": {
+        "0": "month",
+        "1": "year",
         "2": "try_cd",
         "4": "mhcd",
         "6": "vou_no",
@@ -103,6 +111,8 @@
       "columns": {
         "0": "try_cd",
         "1": "mhcd",
+        "2": "year",
+        "3": "month",
         "7": "vou_no",
         "6": "vou_date",
         "4": "ddo_cd",
@@ -117,6 +127,8 @@
       "delimiter": "\t",
       "columns": {
         "TRY_CD": "try_cd",
+        "MONTH": "month",
+        "YEAR": "year",
         "MHCD": "mhcd",
         "SEC_MHCD": "sec_mhcd",
         "SMCD": "smcd",

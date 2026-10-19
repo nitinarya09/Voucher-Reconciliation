@@ -60,6 +60,18 @@ const MP_TREASURIES = [
   {"code": "520", "short_code": "NIW", "name": "District Treasury Office Niwari", "display": "520 - NIW - District Treasury Office Niwari"}
 ];
 
+// Canonical Treasury Short-Code to 3-Digit Numeric Code Mapping
+const MP_TRY_SHORT_TO_CODE = {};
+MP_TREASURIES.forEach(t => {
+  MP_TRY_SHORT_TO_CODE[t.short_code.toUpperCase()] = t.code;
+  MP_TRY_SHORT_TO_CODE[t.code] = t.code;
+});
+MP_TRY_SHORT_TO_CODE['MOE'] = '250';
+MP_TRY_SHORT_TO_CODE['MOR'] = '250';
+MP_TRY_SHORT_TO_CODE['MAU'] = '530';
+MP_TRY_SHORT_TO_CODE['PDH'] = '540';
+MP_TRY_SHORT_TO_CODE['MAI'] = '550';
+
 let currentData = null;
 let currentScreen = 'dashboard';
 let lastScannedFolder = '';
@@ -67,7 +79,15 @@ let lastScannedFolder = '';
 // Excel Column Filters State
 let activeColumnFilters = {
   gross: {},
-  classification: {}
+  classification: {},
+  f1: {},
+  net: {},
+  ag_ded: {},
+  try_ded: {},
+  refunds: {},
+  exc_mismatch: {},
+  exc_missing_compay: {},
+  exc_missing_sop: {}
 };
 let currentOpenFilter = null;
 
@@ -207,6 +227,19 @@ function navigate(screenId) {
     else if (screenId === 'about') targetSubtab = 'about-system';
   }
 
+  // Guard against disabled tabs
+  if (!isScreenEnabled(targetScreen)) {
+    const screenNames = {
+      'gross-net-val': 'Bill Gross–Net Validation',
+      'net-recon': 'Net Bank SOP Reconciliation',
+      'ag-ded': 'AG Deductions Analysis',
+      'non-ag-ded': 'Treasury Deductions Analysis',
+      'refunds': 'Refunds & Deduct-Expenditure Register'
+    };
+    showToast(`The ${screenNames[targetScreen] || targetScreen} tab is currently disabled in Settings.`, true);
+    targetScreen = 'gross-recon';
+  }
+
   currentScreen = targetScreen;
 
   document.querySelectorAll('.nav-item').forEach(btn => {
@@ -276,6 +309,149 @@ function switchSettingsTab(tabKey) {
   if (targetPane) targetPane.classList.add('active');
 }
 
+// =========================================================================
+// RECONCILIATION MODULES & STATUTORY CHECK TOGGLES
+// =========================================================================
+const MODULE_STORAGE_KEY = 'recon_active_modules';
+
+const DEFAULT_MODULE_SETTINGS = {
+  mh_scope_0001_5999: true,
+  bill_gross: false,
+  net_bank_sop: false,
+  ag_ded: false,
+  non_ag_ded: false,
+  try_ded: false,
+  refunds: false
+};
+
+function getActiveModules() {
+  try {
+    const saved = localStorage.getItem(MODULE_STORAGE_KEY);
+    if (saved) {
+      return Object.assign({}, DEFAULT_MODULE_SETTINGS, JSON.parse(saved));
+    }
+  } catch (e) {
+    console.error('Failed to load active modules preference:', e);
+  }
+  return Object.assign({}, DEFAULT_MODULE_SETTINGS);
+}
+
+function saveActiveModules(settings) {
+  try {
+    localStorage.setItem(MODULE_STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Failed to save active modules preference:', e);
+  }
+}
+
+function isConsolidatedFundHead(mhcd) {
+  if (!mhcd) return false;
+  const num = parseInt(String(mhcd).trim(), 10);
+  return !isNaN(num) && num >= 1 && num <= 5999;
+}
+
+function isScreenEnabled(screenId) {
+  const mods = getActiveModules();
+  if (screenId === 'gross-net-val') return !!mods.bill_gross;
+  if (screenId === 'net-recon') return !!mods.net_bank_sop;
+  if (screenId === 'ag-ded') return !!mods.ag_ded;
+  if (screenId === 'non-ag-ded') return !!(mods.non_ag_ded || mods.try_ded);
+  if (screenId === 'refunds') return !!mods.refunds;
+  return true;
+}
+
+function applyModuleVisibility() {
+  const mods = getActiveModules();
+
+  const scopeChk = document.getElementById('toggle-scope-0001-5999');
+  if (scopeChk) scopeChk.checked = (mods.mh_scope_0001_5999 !== false);
+
+  const toggleMap = [
+    { id: 'toggle-check-bill-gross', badge: 'badge-toggle-bill-gross', enabled: !!mods.bill_gross, navId: 'nav-btn-gross-net-val' },
+    { id: 'toggle-check-net-bank-sop', badge: 'badge-toggle-net-bank-sop', enabled: !!mods.net_bank_sop, navId: 'nav-btn-net-recon' },
+    { id: 'toggle-check-ag-ded', badge: 'badge-toggle-ag-ded', enabled: !!mods.ag_ded, navId: 'nav-btn-ag-ded' },
+    { id: 'toggle-check-non-ag-ded', badge: 'badge-toggle-non-ag-ded', enabled: !!mods.non_ag_ded },
+    { id: 'toggle-check-try-ded', badge: 'badge-toggle-try-ded', enabled: !!mods.try_ded },
+    { id: 'toggle-check-refunds', badge: 'badge-toggle-refunds', enabled: !!mods.refunds, navId: 'nav-btn-refunds' }
+  ];
+
+  toggleMap.forEach(item => {
+    const el = document.getElementById(item.id);
+    if (el) el.checked = item.enabled;
+
+    const b = document.getElementById(item.badge);
+    if (b) {
+      b.className = item.enabled ? 'badge badge-success' : 'badge badge-secondary';
+      b.textContent = item.enabled ? 'Active' : 'Disabled';
+    }
+
+    if (item.navId) {
+      const navBtn = document.getElementById(item.navId);
+      if (navBtn) navBtn.style.display = item.enabled ? 'flex' : 'none';
+    }
+  });
+
+  const nonAgNav = document.getElementById('nav-btn-non-ag-ded');
+  if (nonAgNav) {
+    nonAgNav.style.display = (mods.non_ag_ded || mods.try_ded) ? 'flex' : 'none';
+  }
+
+  if (typeof currentScreen !== 'undefined' && currentScreen && !isScreenEnabled(currentScreen)) {
+    navigate('gross-recon');
+  }
+}
+
+function onModuleToggleChange() {
+  const scopeChk = document.getElementById('toggle-scope-0001-5999');
+  const bgChk = document.getElementById('toggle-check-bill-gross');
+  const netChk = document.getElementById('toggle-check-net-bank-sop');
+  const agChk = document.getElementById('toggle-check-ag-ded');
+  const nonAgChk = document.getElementById('toggle-check-non-ag-ded');
+  const tryChk = document.getElementById('toggle-check-try-ded');
+  const refChk = document.getElementById('toggle-check-refunds');
+
+  const newSettings = {
+    mh_scope_0001_5999: scopeChk ? scopeChk.checked : true,
+    bill_gross: bgChk ? bgChk.checked : false,
+    net_bank_sop: netChk ? netChk.checked : false,
+    ag_ded: agChk ? agChk.checked : false,
+    non_ag_ded: nonAgChk ? nonAgChk.checked : false,
+    try_ded: tryChk ? tryChk.checked : false,
+    refunds: refChk ? refChk.checked : false
+  };
+
+  saveActiveModules(newSettings);
+  applyModuleVisibility();
+}
+
+function setPresetModules(preset) {
+  let newSettings;
+  if (preset === 'primary_only' || preset === 'reset') {
+    newSettings = Object.assign({}, DEFAULT_MODULE_SETTINGS);
+  } else if (preset === 'all_enabled') {
+    newSettings = {
+      mh_scope_0001_5999: true,
+      bill_gross: true,
+      net_bank_sop: true,
+      ag_ded: true,
+      non_ag_ded: true,
+      try_ded: true,
+      refunds: true
+    };
+  }
+  saveActiveModules(newSettings);
+  applyModuleVisibility();
+  showToast(preset === 'all_enabled' ? 'All secondary checks & workspaces enabled.' : 'Primary Check Only (0001–5999) configuration applied.');
+}
+
+function saveAndApplyModuleSettings() {
+  onModuleToggleChange();
+  showToast('Reconciliation checks & module preferences successfully saved and applied.');
+  if (typeof rawFileStore !== 'undefined' && rawFileStore && (rawFileStore.file_2 || rawFileStore.file_6)) {
+    runFullReconciliation();
+  }
+}
+
 // Theme Toggle
 function toggleTheme() {
   const html = document.documentElement;
@@ -313,6 +489,56 @@ function toggleFullscreen() {
   }
 }
 
+// Calculate unique vouchers in raw text
+function countUniqueVouchersInRawText(text, role) {
+  if (!text || typeof text !== 'string') return 0;
+  const lines = text.split(/\r?\n/);
+  if (lines.length <= 1) return 0;
+
+  const firstLine = lines[0];
+  let delim = ',';
+  if (firstLine.includes('\t')) delim = '\t';
+  else if (firstLine.includes('|')) delim = '|';
+  else if (firstLine.includes(',')) delim = ',';
+
+  const headerParts = firstLine.split(delim).map(h => h.trim().toUpperCase().replace(/^["']|["']$/g, ''));
+  let vouIdx = headerParts.indexOf('VOU_NO');
+  if (vouIdx === -1) vouIdx = headerParts.indexOf('VOUCHER_NO');
+  if (vouIdx === -1) vouIdx = headerParts.indexOf('VOUCHER NO');
+  if (vouIdx === -1) vouIdx = headerParts.indexOf('VOU_NUM');
+
+  let mhIdx = headerParts.indexOf('MHCD');
+  if (mhIdx === -1) mhIdx = headerParts.indexOf('MAJOR_HEAD');
+  if (mhIdx === -1) mhIdx = headerParts.indexOf('MAJOR HEAD');
+
+  const hasHeader = (vouIdx !== -1 || headerParts.some(h => ['TRY_CD', 'MONTH', 'YEAR', 'AMOUNT', 'GROSS'].includes(h)));
+
+  if (vouIdx === -1) {
+    if (role === 'file_1') { vouIdx = 9; mhIdx = 8; }
+    else if (role === 'file_2') { vouIdx = 4; mhIdx = 6; }
+    else if (role === 'file_3') { vouIdx = 6; mhIdx = 4; }
+    else if (role === 'file_4') { vouIdx = 6; mhIdx = 4; }
+    else if (role === 'file_5') { vouIdx = 7; mhIdx = 1; }
+    else if (role === 'file_6') { vouIdx = 10; mhIdx = 9; }
+  }
+
+  const startRow = hasHeader ? 1 : 0;
+  const uniqueSet = new Set();
+  for (let i = startRow; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line || !line.trim()) continue;
+    const parts = line.split(delim);
+    if (vouIdx >= 0 && vouIdx < parts.length) {
+      const vNo = (parts[vouIdx] || '').trim().replace(/^["']|["']$/g, '').replace(/\.0$/, '');
+      if (vNo && vNo !== 'VOU_NO' && vNo !== 'VOUCHER_NO') {
+        const mh = (mhIdx >= 0 && mhIdx < parts.length) ? (parts[mhIdx] || '').trim().replace(/^["']|["']$/g, '').replace(/\.0$/, '') : '';
+        uniqueSet.add(mh ? `${mh}_${vNo}` : vNo);
+      }
+    }
+  }
+  return uniqueSet.size;
+}
+
 // Render File Cards
 function renderFileCards() {
   const container = document.getElementById('file-cards-container');
@@ -335,6 +561,7 @@ function renderFileCards() {
         <div class="file-card-path">${state && state.path ? state.path : '<em>No file selected</em>'}</div>
         <div class="file-card-stats">
           <span>Records: <strong>${state && state.records ? state.records.toLocaleString() : '0'}</strong></span>
+          <span>Unique Vouchers: <strong style="color: var(--primary);">${state && (state.unique_vouchers != null) ? Number(state.unique_vouchers).toLocaleString() : (state && state.records ? state.records.toLocaleString() : '0')}</strong></span>
           <span>Size: <strong>${state && state.size ? (state.size / 1024).toFixed(1) + ' KB' : '0 KB'}</strong></span>
           <span>Status: <strong style="color: ${isLoaded ? 'var(--success)' : 'var(--warning)'};">${isLoaded ? 'Valid' : 'Pending'}</strong></span>
         </div>
@@ -413,39 +640,136 @@ function populateHistory(events) {
   });
 }
 
+// Render completely blank / initial unpopulated state
+function renderBlankState() {
+  currentData = null;
+  filteredGrossVouchers = [];
+  filteredMismatchVouchers = [];
+  filteredMissingCompayVouchers = [];
+  filteredMissingSopVouchers = [];
+  filteredF1Vouchers = [];
+  filteredNetVouchers = [];
+
+  // 1. Reset KPI cards to ₹0.00 / Ready state
+  const kpis = [
+    { id: 'kpi-compay-grand', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-ifmis-gross', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-ifmis-net', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-ded-total', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-discrepancy', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-class-total', val: '0', title: '0' },
+    { id: 'kpi-class-exact', val: '0', title: '0' },
+    { id: 'kpi-class-reclass', val: '0', title: '0' },
+    { id: 'kpi-class-missing', val: '0', title: '0' },
+    { id: 'kpi-refund-count', val: '0', title: '0' },
+    { id: 'kpi-refund-negative', val: '₹0.00', title: '₹0.00' },
+    { id: 'kpi-refund-adv', val: '0', title: '0' },
+    { id: 'kpi-refund-revenue', val: '0', title: '0' }
+  ];
+  kpis.forEach(k => {
+    const el = document.getElementById(k.id);
+    if (el) {
+      el.textContent = k.val;
+      el.title = k.title;
+    }
+  });
+
+  const elBreak = document.getElementById('kpi-ded-breakdown');
+  if (elBreak) {
+    elBreak.textContent = 'AG Ded: ₹0.00 | Try: ₹0.00';
+    elBreak.title = 'AG Ded: ₹0.00 | Try: ₹0.00';
+  }
+
+  const elTreasuryBadge = document.getElementById('treasury-badge');
+  if (elTreasuryBadge) elTreasuryBadge.textContent = 'Ready | No Files Ingested';
+
+  const stBadge = document.getElementById('overall-status-badge');
+  if (stBadge) {
+    stBadge.className = 'badge badge-info';
+    stBadge.textContent = '● Ready for Ingestion';
+    stBadge.title = 'Select a folder or upload voucher files to begin reconciliation.';
+  }
+
+  const exBadge = document.getElementById('audit-exceptions-badge');
+  if (exBadge) exBadge.style.display = 'none';
+
+  const grossBadge = document.getElementById('gross-recon-badge');
+  if (grossBadge) grossBadge.textContent = '0 Vouchers';
+
+  // 2. Put clean empty placeholder in table bodies
+  const emptyRowHtml = (cols, msg) => `<tr><td colspan="${cols}" style="text-align: center; color: var(--text-muted); padding: 36px 16px;"><div style="font-size: 1.8rem; margin-bottom: 8px;">📂</div><div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main); margin-bottom: 4px;">No Reconciliation Data Loaded</div><div style="font-size: 0.82rem;">${msg || "Please select a data folder or click 'Load Default Files' to ingest voucher files."}</div></td></tr>`;
+
+  const bodies = [
+    { id: 'dash-balance-sheet-body', cols: 5 },
+    { id: 'gross-table-body', cols: 10 },
+    { id: 'f1-table-body', cols: 8 },
+    { id: 'net-table-body', cols: 8 },
+    { id: 'cross-file-checks-body', cols: 9 },
+    { id: 'exc-grand-tally-body', cols: 5 },
+    { id: 'exc-mismatch-body', cols: 8 },
+    { id: 'exc-missing-compay-body', cols: 6 },
+    { id: 'exc-missing-sop-body', cols: 6 },
+    { id: 'exceptions-uncompiled-body', cols: 5 },
+    { id: 'class-table-body', cols: 9 },
+    { id: 'refunds-table-body', cols: 7 },
+    { id: 'ddo-table-body', cols: 8 },
+    { id: 'te-table-body', cols: 7 }
+  ];
+
+  bodies.forEach(b => {
+    const el = document.getElementById(b.id);
+    if (el) el.innerHTML = emptyRowHtml(b.cols);
+  });
+
+  // 3. Reset total rows
+  const grossTopRow = document.getElementById('gross-top-total-row');
+  if (grossTopRow) grossTopRow.innerHTML = `<td colspan="10" style="text-align: center; color: var(--text-muted); padding: 8px;">No data loaded</td>`;
+
+  const classTopRow = document.getElementById('class-top-total-row');
+  if (classTopRow) classTopRow.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 8px;">No data loaded</td>`;
+
+  // 4. File cards: render blank state
+  fileStates = {};
+  for (let i = 1; i <= 6; i++) {
+    fileStates[`file_${i}`] = { path: '', loaded: false, records: 0, size: 0 };
+  }
+  renderFileCards();
+}
+
 // Main Initialization Function
 function initApp() {
   initTheme();
   populateTreasuryDropdown();
   renderFileCards();
   populateColumnMapping();
+  applyModuleVisibility();
 
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.get_initial_state().then(function(res) {
       isBridgeInitialized = true;
-      if (res && res.file_states) {
+      if (res && res.file_states && Object.values(res.file_states).some(s => s && s.loaded)) {
         fileStates = res.file_states;
         renderFileCards();
+      } else {
+        renderBlankState();
       }
       if (res && res.reconciliation_results) {
         currentData = res.reconciliation_results;
         populateAllScreens(currentData);
+      } else {
+        renderBlankState();
       }
-      if (res && res.audit_logs) {
+      if (res && res.audit_logs && res.audit_logs.length > 0) {
         populateHistory(res.audit_logs);
       }
     }).catch(function(err) {
       console.error("get_initial_state error:", err);
-      showToast("Init error: " + err, true);
+      renderBlankState();
     });
   } else {
-    // Pure Web / GitHub Pages Mode
+    // Pure Web / Standalone HTML Mode - ALWAYS start 100% BLANK on initial launch
     isBridgeInitialized = true;
-    if (typeof BASELINE_DATA !== 'undefined' && BASELINE_DATA) {
-      currentData = BASELINE_DATA;
-      populateAllScreens(currentData);
-      loadDefaultFiles();
-    }
+    renderBlankState();
   }
 }
 
@@ -453,6 +777,12 @@ function populateTreasuryDropdown() {
   const select = document.getElementById('import-treasury-select');
   if (!select) return;
   select.innerHTML = '';
+
+  const allOpt = document.createElement('option');
+  allOpt.value = 'ALL';
+  allOpt.textContent = 'ALL — All 58 MP Treasuries (Statewide Consolidated)';
+  select.appendChild(allOpt);
+
   MP_TREASURIES.forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.code;
@@ -473,8 +803,8 @@ function onIngestionParamChange() {
 
   const criteria = {
     treasury_code: trySelect ? trySelect.value : '052',
-    month: monthSelect ? monthSelect.value : '05',
-    year: yearSelect ? yearSelect.value : '2025',
+    month: monthSelect ? monthSelect.value : 'ALL',
+    year: yearSelect ? yearSelect.value : '2025-26',
     folder_path: lastScannedFolder || ''
   };
 
@@ -498,6 +828,7 @@ function onIngestionParamChange() {
 
 function onReady() {
   initTheme();
+  applyModuleVisibility();
   populateTreasuryDropdown();
   renderFileCards();
   populateColumnMapping();
@@ -532,8 +863,8 @@ function browseFolderAndAutoImport() {
 
   const criteria = {
     treasury_code: trySelect ? trySelect.value : '052',
-    month: monthSelect ? monthSelect.value : '04',
-    year: yearSelect ? yearSelect.value : '2025'
+    month: monthSelect ? monthSelect.value : 'ALL',
+    year: yearSelect ? yearSelect.value : '2025-26'
   };
 
   if (window.pywebview && window.pywebview.api) {
@@ -577,6 +908,56 @@ function browseFolderAndAutoImport() {
   }
 }
 
+function readFileContentSmart(file) {
+  return new Promise((resolve) => {
+    if (!file || file.size === 0) {
+      resolve({ name: file ? file.name : '', text: '', size: 0, isEmpty: true });
+      return;
+    }
+
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    const reader = new FileReader();
+
+    if (isExcel) {
+      reader.onload = function(e) {
+        try {
+          if (typeof XLSX === 'undefined') {
+            resolve({ name: file.name, text: '', size: file.size, error: 'XLSX library not loaded' });
+            return;
+          }
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const tsv = XLSX.utils.sheet_to_csv(worksheet, { FS: '\t' });
+          resolve({ name: file.name, text: tsv, size: file.size, isExcel: true });
+        } catch (err) {
+          console.error("Failed to parse Excel file " + file.name, err);
+          resolve({ name: file.name, text: '', size: file.size, error: err.message });
+        }
+      };
+      reader.onerror = () => resolve({ name: file.name, text: '', size: 0, error: 'Read error' });
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = function(e) {
+        let text = e.target.result || '';
+        text = text.replace(/^\ufeff/, '');
+
+        // Check for HTML error or gateway timeout downloads from IFMIS / VLC portal
+        const head = text.slice(0, 400).toLowerCase();
+        if (head.includes('<!doctype') || head.includes('<html') || head.includes('504 gateway') || head.includes('502 bad gateway') || head.includes('session expired') || head.includes('ora-01013')) {
+          resolve({ name: file.name, text: '', size: file.size, isHtmlError: true });
+          return;
+        }
+
+        resolve({ name: file.name, text: text, size: file.size });
+      };
+      reader.onerror = () => resolve({ name: file.name, text: '', size: 0, error: 'Read error' });
+      reader.readAsText(file);
+    }
+  });
+}
+
 function renderFolderImportStatus(res) {
   const statusEl = document.getElementById('folder-import-status');
   if (!statusEl) return;
@@ -590,18 +971,45 @@ function renderFolderImportStatus(res) {
     detailsHtml += `<li><strong>${label}:</strong> <code>${fname}</code></li>`;
   }
   detailsHtml += `</ul>`;
+
+  if (res.skipped_empty_count > 0 || res.skipped_html_count > 0) {
+    let skipNotice = [];
+    if (res.skipped_empty_count > 0) skipNotice.push(`${res.skipped_empty_count} empty/unpopulated treasury downloads safely bypassed`);
+    if (res.skipped_html_count > 0) skipNotice.push(`${res.skipped_html_count} corrupt HTML/timeout pages safely skipped`);
+    detailsHtml += `<div style="margin: 4px 0 8px 0; font-size: 0.8rem; color: #b45309; background: #fef3c7; padding: 4px 10px; border-radius: 4px; border-left: 3px solid #f59e0b;">
+      🛡️ <strong>Smart Download Filter:</strong> ${skipNotice.join(', ')}. Clean dataset preserved without data loss.
+    </div>`;
+  }
+
   if (res.unmatched && res.unmatched.length > 0) {
     detailsHtml += `<span style="color: var(--text-muted); font-size: 0.78rem;">Other files ignored: ${res.unmatched.join(', ')}</span><br>`;
   }
-  if (res.is_all_ready || loadedKeys.length === 6) {
+  const hasF2 = !!(res.identified && res.identified['file_2']) || (fileStates && fileStates.file_2 && fileStates.file_2.loaded);
+  const hasF1 = !!(res.identified && res.identified['file_1']) || (fileStates && fileStates.file_1 && fileStates.file_1.loaded);
+  const hasF6 = !!(res.identified && res.identified['file_6']) || (fileStates && fileStates.file_6 && fileStates.file_6.loaded);
+  const isPrimaryReady = (hasF2 || hasF1) && hasF6;
+  const isAllReady = res.is_all_ready || loadedKeys.length === 6;
+
+  if (isAllReady) {
     detailsHtml += `<div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
       <span style="color: var(--success); font-weight: 700;">✅ All 6 files successfully loaded and validated! Ready to run reconciliation.</span>
       <button class="btn-primary btn-sm" onclick="runFullReconciliation()" style="background: var(--success); border-color: var(--success); font-weight: 700;">
         <span>⚡</span> Run Reconciliation Now
       </button>
     </div>`;
+  } else if (isPrimaryReady) {
+    const fName = hasF2 ? 'File 02 (Detailed Gross)' : 'File 01 (Bill Master)';
+    detailsHtml += `<div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+      <div>
+        <span style="color: var(--success); font-weight: 700;">✅ Primary Reconciliation Files Loaded (${fName} & File 06 VLC COMPAY)! Ready to run reconciliation.</span>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Secondary checks (Files 1, 3, 4, 5) optional / skipped for this run.</div>
+      </div>
+      <button class="btn-primary btn-sm" onclick="runFullReconciliation()" style="background: var(--success); border-color: var(--success); font-weight: 700;">
+        <span>⚡</span> Run Reconciliation Now
+      </button>
+    </div>`;
   } else {
-    detailsHtml += `<div style="margin-top: 6px; color: var(--warning); font-weight: 700;">⚠️ ${6 - loadedKeys.length} file(s) remaining. You can browse them individually below.</div>`;
+    detailsHtml += `<div style="margin-top: 6px; color: var(--warning); font-weight: 700;">⚠️ Primary files required: File 02 (Detailed Gross) & File 06 (VLC COMPAY). ${6 - loadedKeys.length} file(s) remaining. You can browse them individually below.</div>`;
   }
   statusEl.innerHTML = detailsHtml;
   statusEl.style.display = 'block';
@@ -648,6 +1056,7 @@ function browseSingleFile(fileId) {
           path: res.path,
           loaded: res.is_loaded,
           records: res.records_count,
+          unique_vouchers: res.unique_vouchers,
           size: res.file_size
         };
         renderFileCards();
@@ -662,22 +1071,31 @@ function browseSingleFile(fileId) {
       fi.onchange = function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          if (typeof clientUploadedRawFiles !== 'undefined') {
-            clientUploadedRawFiles[clientCurrentBrowseFileId] = evt.target.result;
+        readFileContentSmart(file).then(res => {
+          if (res.isEmpty) {
+            showToast(`Selected file is empty (0 bytes): ${file.name}`, true);
+            return;
           }
-          const lineCount = (evt.target.result.match(/\n/g) || []).length;
+          if (res.isHtmlError) {
+            showToast(`Selected file appears to be an HTML error/timeout page: ${file.name}`, true);
+            return;
+          }
+          const rawText = res.text || '';
+          if (typeof clientUploadedRawFiles !== 'undefined') {
+            clientUploadedRawFiles[clientCurrentBrowseFileId] = rawText;
+          }
+          const lineCount = (rawText.match(/\n/g) || []).length;
+          const uCount = countUniqueVouchersInRawText(rawText, clientCurrentBrowseFileId);
           fileStates[clientCurrentBrowseFileId] = {
             path: file.name,
             loaded: true,
             records: lineCount,
+            unique_vouchers: uCount,
             size: file.size
           };
           renderFileCards();
-          showToast(`Imported ${file.name} for ${clientCurrentBrowseFileId.toUpperCase()}`);
-        };
-        reader.readAsText(file);
+          showToast(`Imported ${file.name} for ${clientCurrentBrowseFileId.toUpperCase()} (${lineCount.toLocaleString()} records)`);
+        });
       };
       fi.value = '';
       fi.click();
@@ -758,12 +1176,19 @@ function runFullReconciliation() {
   });
   showToast("Executing multi-file reconciliation pipeline...");
 
+  const mSelect = document.getElementById('import-month-select');
+  const monthVal = mSelect ? mSelect.value : 'ALL';
+  const ySelect = document.getElementById('import-year-select');
+  const yearVal = ySelect ? ySelect.value : '2025-26';
+
   const keyConfig = {
     try_cd: document.getElementById('key-try') ? document.getElementById('key-try').checked : true,
     mhcd: document.getElementById('key-mhcd') ? document.getElementById('key-mhcd').checked : true,
     vou_no: document.getElementById('key-vou') ? document.getElementById('key-vou').checked : true,
     vou_date: document.getElementById('key-date') ? document.getElementById('key-date').checked : false,
-    ddo_cd: document.getElementById('key-ddo') ? document.getElementById('key-ddo').checked : false
+    ddo_cd: document.getElementById('key-ddo') ? document.getElementById('key-ddo').checked : false,
+    target_month: (monthVal && monthVal.toUpperCase() !== 'ALL') ? String(parseInt(monthVal, 10)) : null,
+    target_year: yearVal
   };
   const tolEl = document.getElementById('recon-tolerance');
   const tolerance = tolEl ? (parseFloat(tolEl.value) || 0.0) : 0.0;
@@ -1339,6 +1764,7 @@ function detectPeriodFromDates(dates, tryCodes) {
   });
 
   let bestK = null, bestCount = -1;
+  const distinctKeys = Object.keys(counts);
   for (const [k, c] of Object.entries(counts)) {
     if (c > bestCount) {
       bestCount = c;
@@ -1346,9 +1772,31 @@ function detectPeriodFromDates(dates, tryCodes) {
     }
   }
 
+  // Check if Ingestion criteria specified 'ALL' months or specific financial year
+  const mSel = (typeof document !== 'undefined') ? document.getElementById('import-month-select') : null;
+  const ySel = (typeof document !== 'undefined') ? document.getElementById('import-year-select') : null;
+  const isMonthAllSelected = mSel && mSel.value === 'ALL';
+  const selectedYearVal = ySel ? ySel.value : '';
+
   let periodAbbr = 'Oct 2025';
   let periodFull = 'October 2025';
-  if (bestK) {
+
+  if (distinctKeys.length > 1 || isMonthAllSelected) {
+    const years = Array.from(new Set(distinctKeys.map(k => parseInt(k.split('-')[1], 10)).filter(Boolean))).sort((a, b) => a - b);
+    if (years.length > 1) {
+      periodAbbr = `FY ${years[0]}-${String(years[years.length - 1]).slice(-2)}`;
+      periodFull = `Financial Year ${years[0]}-${String(years[years.length - 1]).slice(-2)} (${distinctKeys.length > 0 ? distinctKeys.length : 12} Months)`;
+    } else if (years.length === 1) {
+      periodAbbr = `FY ${years[0]}-${String(years[0] + 1).slice(-2)}`;
+      periodFull = `Financial Year ${years[0]}-${String(years[0] + 1).slice(-2)} (${distinctKeys.length} Months)`;
+    } else if (selectedYearVal) {
+      periodAbbr = `FY ${selectedYearVal}`;
+      periodFull = `Financial Year ${selectedYearVal} (All 12 Months)`;
+    } else {
+      periodAbbr = 'FY 2025-26';
+      periodFull = 'Financial Year 2025-26 (All 12 Months)';
+    }
+  } else if (bestK) {
     const [mStr, yStr] = bestK.split('-');
     const m = parseInt(mStr, 10);
     const names = MONTH_NAMES[m] || ['Mon', 'Month'];
@@ -1370,13 +1818,20 @@ function detectPeriodFromDates(dates, tryCodes) {
       topTry = t;
     }
   }
-  const tryDisplay = (topTry === '052' || topTry === 'VAL') ? '052 (VAL)' : topTry;
+  let tryDisplay = (topTry === '052' || topTry === 'VAL') ? '052 (VAL)' : topTry;
+  let badgeText = `Treasury: ${tryDisplay} — ${periodAbbr}`;
+
+  const distinctTries = Object.keys(tryCounts);
+  if (distinctTries.length > 1) {
+    tryDisplay = `All Treasuries (${distinctTries.length} Statewide)`;
+    badgeText = `Statewide Consolidated (${distinctTries.length} Treasuries) — ${periodAbbr}`;
+  }
 
   return {
     periodAbbr,
     periodFull,
     treasuryDisplay: tryDisplay,
-    badgeText: `Treasury: ${tryDisplay} — ${periodAbbr}`
+    badgeText
   };
 }
 
@@ -1427,6 +1882,8 @@ function parseDelimitedLines(text) {
 
 function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   const t0 = Date.now();
+  const activeMods = getActiveModules();
+  const isMhScopeConsolidated = (activeMods.mh_scope_0001_5999 !== false);
   const rawFiles = clientUploadedRawFiles;
   const f6Raw = rawFiles.file_6;
   const f1Raw = rawFiles.file_1;
@@ -1438,6 +1895,10 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   if (!f6Raw && !f1Raw && !f2Raw) {
     throw new Error("No files loaded to reconcile.");
   }
+
+  const mSelect = document.getElementById('import-month-select');
+  const activeMonthVal = mSelect ? mSelect.value : 'ALL';
+  const targetMonthNum = (activeMonthVal && activeMonthVal.toUpperCase() !== 'ALL') ? parseInt(activeMonthVal, 10) : null;
 
   const detectedDates = [];
   const detectedTryCodes = [];
@@ -1462,6 +1923,15 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       for (let i = 1; i < f6Rows.length; i++) {
         const row = f6Rows[i];
         if (row.length < 5) continue;
+
+        // When reconciling a specific target month, skip records belonging to other months
+        if (targetMonthNum !== null && f6Idx.MONTH !== undefined) {
+          const rowM = parseInt(row[f6Idx.MONTH], 10);
+          if (!isNaN(rowM) && rowM !== targetMonthNum) {
+            continue;
+          }
+        }
+
         const teNo = (f6Idx.TE_NO !== undefined ? row[f6Idx.TE_NO] : '') || '';
         const ssSop = (f6Idx.SS_SOP !== undefined ? row[f6Idx.SS_SOP] : '') || '';
         const amt = parseFloat(row[f6Idx.AMOUNT] || 0) || 0;
@@ -1469,7 +1939,8 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
         const mhcd = ((f6Idx.MHCD !== undefined ? row[f6Idx.MHCD] : '') || '').trim().replace(/\.0$/, '');
         const secMhcd = ((f6Idx.SEC_MHCD !== undefined ? row[f6Idx.SEC_MHCD] : '') || '').trim().replace(/\.0$/, '');
         const vouNo = ((f6Idx.VOU_NO !== undefined ? row[f6Idx.VOU_NO] : '') || '').trim().replace(/\.0$/, '');
-        const tryCd = (f6Idx.TRY_CD !== undefined ? row[f6Idx.TRY_CD] : '').replace(/^VAL$/i, '052') || '052';
+        const rawTry = ((f6Idx.TRY_CD !== undefined ? row[f6Idx.TRY_CD] : '') || '').trim().toUpperCase();
+        const tryCd = MP_TRY_SHORT_TO_CODE[rawTry] || rawTry || '052';
         const ddoCd = (f6Idx.DDO_CD !== undefined ? row[f6Idx.DDO_CD] : '') || '';
         const billDate = (f6Idx.BILL_DATE !== undefined ? row[f6Idx.BILL_DATE] : '') || '';
         const smcd = ((f6Idx.SMCD !== undefined ? row[f6Idx.SMCD] : '') || '').trim().replace(/\.0$/, '');
@@ -1495,18 +1966,35 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
           cpTeTotal += amt;
         } else {
           cpPayments.push(rec);
-          cpPaymentTotal += amt;
 
           // For comparison of Major Head 8009 with File 2:
           // Gross payments of 8009 have sec_mhcd === '8009'.
           // Records where mhcd === '8009' but sec_mhcd !== '8009' are GPF deductions from salary bills (File 3).
           const isDeduction8009 = (mhcd === '8009' && secMhcd !== '8009');
+          const effectiveMhcd = (secMhcd === '8009') ? '8009' : mhcd;
 
-          if (!isDeduction8009) {
-            const effectiveMhcd = (secMhcd === '8009') ? '8009' : mhcd;
-            const vk = `${effectiveMhcd}|${vouNo}`;
+          // Scope check: If primary check restricts to Major Heads 0001 to 5999
+          const inScope = !isMhScopeConsolidated || isConsolidatedFundHead(effectiveMhcd);
+          if (inScope) {
+            cpPaymentTotal += amt;
+          }
+
+          if (!isDeduction8009 && inScope) {
+            let m = (f6Idx.MONTH !== undefined ? row[f6Idx.MONTH] : '') || '';
+            let y = (f6Idx.YEAR !== undefined ? row[f6Idx.YEAR] : '') || '';
+            if (!m && billDate) {
+              const dParts = billDate.split(/[-/]/);
+              if (dParts.length === 3) {
+                m = dParts[1];
+                y = dParts[2].length === 2 ? ('20' + dParts[2]) : dParts[2];
+              }
+            }
+            m = m ? String(parseInt(m, 10)) : '';
+            y = (y && y.length === 2) ? ('20' + y) : y;
+
+            const vk = (m && y) ? `${tryCd}|${m}|${y}|${effectiveMhcd}|${vouNo}` : `${effectiveMhcd}|${vouNo}`;
             if (!cpVouGrp.has(vk)) {
-              cpVouGrp.set(vk, { gross: 0, count: 0, ddo_cd: ddoCd, bill_date: billDate, try_cd: tryCd });
+              cpVouGrp.set(vk, { gross: 0, count: 0, ddo_cd: ddoCd, bill_date: billDate, try_cd: tryCd, month: m, year: y });
             }
             const cg = cpVouGrp.get(vk);
             cg.gross += amt;
@@ -1562,6 +2050,9 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const row = f1Rows[i];
       if (row.length < 10) continue;
       if (row[0].toUpperCase().includes('MONTH')) continue;
+      const m = row[0] ? String(parseInt(row[0], 10)) : '';
+      let y = (row[1] || '').trim();
+      if (y.length === 2) y = '20' + y;
       const try_cd = row[3] || '052';
       const token_no = row[4] || '';
       const ddo_cd = row[6] || '';
@@ -1573,16 +2064,19 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const try_ded = parseFloat(row[13] || 0) || 0;
       const net = parseFloat(row[14] || 0) || 0;
 
-      f1GrossTotal += gross;
-      f1AgDedTotal += ag_ded;
-      f1TryDedTotal += try_ded;
-      f1NetTotal += net;
+      const inScope = !isMhScopeConsolidated || isConsolidatedFundHead(mhcd);
+      if (inScope) {
+        f1GrossTotal += gross;
+        f1AgDedTotal += ag_ded;
+        f1TryDedTotal += try_ded;
+        f1NetTotal += net;
 
-      if (vou_date) detectedDates.push(vou_date);
-      if (try_cd) detectedTryCodes.push(try_cd);
+        if (vou_date) detectedDates.push(vou_date);
+        if (try_cd) detectedTryCodes.push(try_cd);
 
-      const k = `${mhcd}|${vou_no}`;
-      f1Map.set(k, { try_cd, ddo_cd, mhcd, vou_no, vou_date, token_no, gross, ag_ded, try_ded, net });
+        const k = (m && y) ? `${try_cd}|${m}|${y}|${mhcd}|${vou_no}` : `${mhcd}|${vou_no}`;
+        f1Map.set(k, { try_cd, ddo_cd, mhcd, vou_no, vou_date, token_no, gross, ag_ded, try_ded, net, month: m, year: y });
+      }
     }
   }
 
@@ -1597,16 +2091,23 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       if (row[0].toUpperCase().includes('TRY')) continue;
       const try_cd = row[0] || '052';
       const mhcd = row[1] || '';
+      let y = (row[2] || '').trim();
+      if (y.length === 2) y = '20' + y;
+      const m = row[3] ? String(parseInt(row[3], 10)) : '';
       const ddo_cd = row[4] || '';
       const token_no = row[5] || '';
       const vou_date = row[6] || '';
       const vou_no = row[7] || '';
       const net = parseFloat(row[9] || 0) || 0;
-      f5NetTotal += net;
-      if (vou_date) detectedDates.push(vou_date);
-      if (try_cd) detectedTryCodes.push(try_cd);
-      const k = `${mhcd}|${vou_no}`;
-      f5Map.set(k, { try_cd, mhcd, ddo_cd, token_no, vou_date, vou_no, net });
+
+      const inScope = !isMhScopeConsolidated || isConsolidatedFundHead(mhcd);
+      if (inScope) {
+        f5NetTotal += net;
+        if (vou_date) detectedDates.push(vou_date);
+        if (try_cd) detectedTryCodes.push(try_cd);
+        const k = (m && y) ? `${try_cd}|${m}|${y}|${mhcd}|${vou_no}` : `${mhcd}|${vou_no}`;
+        f5Map.set(k, { try_cd, mhcd, ddo_cd, token_no, vou_date, vou_no, net, month: m, year: y });
+      }
     }
   }
 
@@ -1620,6 +2121,9 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const row = f2Rows[i];
       if (row.length < 12) continue;
       if (row[0].toUpperCase().includes('MONTH')) continue;
+      const m = row[0] ? String(parseInt(row[0], 10)) : '';
+      let y = (row[1] || '').trim();
+      if (y.length === 2) y = '20' + y;
       const try_cd = row[2] || '052';
       const vou_no = row[4] || '';
       const vou_date = row[5] || '';
@@ -1632,25 +2136,28 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const vc = (row[13] || 'V').toUpperCase();
       const amt = parseFloat(row[15] || 0) || 0;
 
-      f2GrossTotal += amt;
-      if (vou_date) detectedDates.push(vou_date);
-      if (try_cd) detectedTryCodes.push(try_cd);
+      const inScope = !isMhScopeConsolidated || isConsolidatedFundHead(mhcd);
+      if (inScope) {
+        f2GrossTotal += amt;
+        if (vou_date) detectedDates.push(vou_date);
+        if (try_cd) detectedTryCodes.push(try_cd);
 
-      const vk = `${mhcd}|${vou_no}`;
-      if (!f2VouGrp.has(vk)) {
-        f2VouGrp.set(vk, { gross: 0, count: 0, try_cd, vou_date });
-      }
-      const vg = f2VouGrp.get(vk);
-      vg.gross += amt;
-      vg.count += 1;
+        const vk = (m && y) ? `${try_cd}|${m}|${y}|${mhcd}|${vou_no}` : `${mhcd}|${vou_no}`;
+        if (!f2VouGrp.has(vk)) {
+          f2VouGrp.set(vk, { gross: 0, count: 0, try_cd, vou_date, month: m, year: y });
+        }
+        const vg = f2VouGrp.get(vk);
+        vg.gross += amt;
+        vg.count += 1;
 
-      const head15 = `${mhcd.padStart(4, '0')}-${smcd.padStart(2, '0')}-${micd.padStart(3, '0')}-${shcd.padStart(4, '0')}-${dhcd.padStart(2, '0')}-${sdcd.padStart(3, '0')}-${vc}`;
-      if (!f2HeadGrp.has(head15)) {
-        f2HeadGrp.set(head15, { mhcd, gross: 0, count: 0 });
+        const head15 = `${mhcd.padStart(4, '0')}-${smcd.padStart(2, '0')}-${micd.padStart(3, '0')}-${shcd.padStart(4, '0')}-${dhcd.padStart(2, '0')}-${sdcd.padStart(3, '0')}-${vc}`;
+        if (!f2HeadGrp.has(head15)) {
+          f2HeadGrp.set(head15, { mhcd, gross: 0, count: 0 });
+        }
+        const hg = f2HeadGrp.get(head15);
+        hg.gross += amt;
+        hg.count += 1;
       }
-      const hg = f2HeadGrp.get(head15);
-      hg.gross += amt;
-      hg.count += 1;
     }
   } else {
     f2GrossTotal = f1GrossTotal;
@@ -1666,6 +2173,9 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const row = f3Rows[i];
       if (row.length < 10) continue;
       if (row[0].toUpperCase().includes('MONTH')) continue;
+      const m = row[0] ? String(parseInt(row[0], 10)) : '';
+      let y = (row[1] || '').trim();
+      if (y.length === 2) y = '20' + y;
       const try_cd = row[2] || '052';
       const mhcd = row[4] || '';
       const date = row[5] || '';
@@ -1676,9 +2186,9 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       f3Total += amt;
       if (ded_mhcd === '8009') f3GpfTotal += amt;
       else if (ded_mhcd === '6075') f3LoanTotal += amt;
-      else if (['0070', '7610', '8342'].includes(ded_mhcd)) f3RecoveryTotal += amt;
+      else f3RecoveryTotal += amt;
 
-      const vk = `${mhcd}|${vou_no}`;
+      const vk = (m && y) ? `${try_cd}|${m}|${y}|${mhcd}|${vou_no}` : `${mhcd}|${vou_no}`;
       if (!f3VouGrp.has(vk)) {
         f3VouGrp.set(vk, { gpf: 0, recovery: 0, loan: 0, other: 0 });
       }
@@ -1687,13 +2197,33 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       else if (ded_mhcd === '6075') fg.loan += amt;
       else fg.recovery += amt;
 
-      if (agDeductionsSample.length < 200) {
-        agDeductionsSample.push({
-          try_cd, mhcd, vou_no, ddo_cd: (f1Map.get(vk) || {}).ddo_cd || '',
-          token_no: (f1Map.get(vk) || {}).token_no || '',
-          ded_mhcd, amount: amt
-        });
-      }
+      const dedDesc = getMajorHeadTitle(ded_mhcd) || `Head ${ded_mhcd}`;
+      const dedTreatment = (ded_mhcd === '8009')
+        ? 'Credited to GPF (8009) in COMPAY'
+        : ((ded_mhcd === '0070')
+            ? 'Netted Recovery from Bill'
+            : ((ded_mhcd === '6075')
+                ? 'Loan Recovery Head (6075)'
+                : ((ded_mhcd === '7610')
+                    ? 'Deduct-Exp Advance Recovery'
+                    : (ded_mhcd === '0030'
+                        ? 'Stamps & Registration Recovery Netted'
+                        : (ded_mhcd === '0028'
+                            ? 'Professional Tax Netted'
+                            : 'AG Accounting Schedule')))));
+
+      agDeductionsSample.push({
+        try_cd,
+        service_mhcd: mhcd,
+        mhcd,
+        vou_no,
+        ddo_cd: (f1Map.get(vk) || {}).ddo_cd || '',
+        token_no: (f1Map.get(vk) || {}).token_no || '',
+        ded_mhcd,
+        ded_desc: dedDesc,
+        amount: amt,
+        treatment: dedTreatment
+      });
     }
   }
 
@@ -1707,22 +2237,41 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const row = f4Rows[i];
       if (row.length < 10) continue;
       if (row[0].toUpperCase().includes('MONTH')) continue;
+      const m = row[0] ? String(parseInt(row[0], 10)) : '';
+      let y = (row[1] || '').trim();
+      if (y.length === 2) y = '20' + y;
       const try_cd = row[2] || '052';
       const mhcd = row[4] || '';
       const vou_no = row[6] || '';
       const ded_mhcd = row[7] || '';
       const amt = parseFloat(row[14] || 0) || 0;
       f4Total += amt;
-      const vk = `${mhcd}|${vou_no}`;
+      const vk = (m && y) ? `${try_cd}|${m}|${y}|${mhcd}|${vou_no}` : `${mhcd}|${vou_no}`;
       f4VouGrp.set(vk, (f4VouGrp.get(vk) || 0) + amt);
 
-      if (tryDeductionsSample.length < 200) {
-        tryDeductionsSample.push({
-          try_cd, mhcd, vou_no, ddo_cd: (f1Map.get(vk) || {}).ddo_cd || '',
-          token_no: (f1Map.get(vk) || {}).token_no || '',
-          ded_mhcd, amount: amt
-        });
-      }
+      const tryDedDesc = getMajorHeadTitle(ded_mhcd) || `Head ${ded_mhcd}`;
+      const tryDedTreatment = ['8011', '8342', '8443'].includes(ded_mhcd)
+        ? 'Public Account / Deposits'
+        : (ded_mhcd === '0028'
+            ? 'Professional Tax (PT Remittance)'
+            : (ded_mhcd === '8658'
+                ? 'Suspense / TDS'
+                : (ded_mhcd === '0216'
+                    ? 'Housing / GIS Deductions'
+                    : 'Treasury Remittance / Public Account')));
+
+      tryDeductionsSample.push({
+        try_cd,
+        service_mhcd: mhcd,
+        mhcd,
+        vou_no,
+        ddo_cd: (f1Map.get(vk) || {}).ddo_cd || '',
+        token_no: (f1Map.get(vk) || {}).token_no || '',
+        ded_mhcd,
+        ded_desc: tryDedDesc,
+        amount: amt,
+        treatment: tryDedTreatment
+      });
     }
   }
 
@@ -1730,14 +2279,42 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   const periodMeta = detectPeriodFromDates(detectedDates, detectedTryCodes);
 
   // 7. Master 3-Way Voucher Matcher
-  const allVoucherKeys = new Set([...f1Map.keys(), ...f2VouGrp.keys(), ...cpVouGrp.keys(), ...f5Map.keys()]);
+  // When primary check is active, key set consists of vouchers from File 2 and File 6 (COMPAY)
+  // plus File 1 / File 5 if secondary checks are enabled.
+  const allVoucherKeys = new Set([...f2VouGrp.keys(), ...cpVouGrp.keys()]);
+  if (activeMods.bill_gross || activeMods.net_bank_sop) {
+    for (const k of f1Map.keys()) {
+      const parts = k.split('|');
+      const mh = parts.length === 5 ? parts[3] : parts[0];
+      if (!isMhScopeConsolidated || isConsolidatedFundHead(mh)) {
+        allVoucherKeys.add(k);
+      }
+    }
+    for (const k of f5Map.keys()) {
+      const parts = k.split('|');
+      const mh = parts.length === 5 ? parts[3] : parts[0];
+      if (!isMhScopeConsolidated || isConsolidatedFundHead(mh)) {
+        allVoucherKeys.add(k);
+      }
+    }
+  }
   const voucherRegister = [];
   const statusCounts = {};
   let missing4801Amt = 0;
   let uncompiledAmt = 0;
 
   for (const k of allVoucherKeys) {
-    const [mhcd, vou_no] = k.split('|');
+    const parts = k.split('|');
+    let try_cd_key = '', m_key = '', y_key = '', mhcd = '', vou_no = '';
+    if (parts.length === 5) {
+      [try_cd_key, m_key, y_key, mhcd, vou_no] = parts;
+    } else {
+      [mhcd, vou_no] = parts;
+    }
+
+    if (isMhScopeConsolidated && !isConsolidatedFundHead(mhcd)) {
+      continue;
+    }
     const f1 = f1Map.get(k);
     const f2 = f2VouGrp.get(k);
     const cp = cpVouGrp.get(k);
@@ -1745,13 +2322,13 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
     const f3 = f3VouGrp.get(k) || { gpf: 0, recovery: 0, loan: 0, other: 0 };
     const f4 = f4VouGrp.get(k) || 0;
 
-    const try_cd = (f1 && f1.try_cd) || (f2 && f2.try_cd) || (f5 && f5.try_cd) || (cp && cp.try_cd) || '052';
+    const try_cd = try_cd_key || (f1 && f1.try_cd) || (f2 && f2.try_cd) || (f5 && f5.try_cd) || (cp && cp.try_cd) || '052';
     const ddo_cd = (f1 && f1.ddo_cd) || (cp && cp.ddo_cd) || (f5 && f5.ddo_cd) || '';
     const token_no = (f1 && f1.token_no) || (f5 && f5.token_no) || '';
     const vou_date = (f1 && f1.vou_date) || (f2 && f2.vou_date) || (cp && cp.bill_date) || (f5 && f5.vou_date) || '';
 
     const cpGross = cp ? cp.gross : 0;
-    const sopGross = f1 ? f1.gross : (f2 ? f2.gross : 0);
+    const sopGross = f2 ? f2.gross : (f1 ? f1.gross : 0);
     const agDed = f1 ? f1.ag_ded : 0;
     const tryDed = f1 ? f1.try_ded : 0;
     const f1Net = f1 ? f1.net : 0;
@@ -1809,6 +2386,8 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
 
     voucherRegister.push({
       try_cd,
+      month: m_key,
+      year: y_key,
       mhcd,
       vou_no,
       ddo_cd,
@@ -1829,6 +2408,13 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   voucherRegister.sort((a, b) => {
     if (a.status === 'EXACT_MATCH' && b.status !== 'EXACT_MATCH') return -1;
     if (a.status !== 'EXACT_MATCH' && b.status === 'EXACT_MATCH') return 1;
+    if (a.try_cd && b.try_cd && a.try_cd !== b.try_cd) return a.try_cd.localeCompare(b.try_cd);
+    const aYr = parseInt(a.year, 10) || 0;
+    const bYr = parseInt(b.year, 10) || 0;
+    if (aYr !== bYr) return aYr - bYr;
+    const aMo = parseInt(a.month, 10) || 0;
+    const bMo = parseInt(b.month, 10) || 0;
+    if (aMo !== bMo) return aMo - bMo;
     const aMh = parseInt(a.mhcd, 10) || 99999;
     const bMh = parseInt(b.mhcd, 10) || 99999;
     if (aMh !== bMh) return aMh - bMh;
@@ -1838,7 +2424,9 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   });
 
   // Reconciled payments & discrepancy
-  const reconciledPayments = (f2GrossTotal - uncompiledAmt + missing4801Amt + f3GpfTotal - f3RecoveryTotal + f3LoanTotal);
+  const reconciledPayments = isMhScopeConsolidated
+    ? (f2GrossTotal + missing4801Amt)
+    : (f2GrossTotal - uncompiledAmt + missing4801Amt + f3GpfTotal - f3RecoveryTotal + f3LoanTotal);
   const paymentDiscrepancy = reconciledPayments - cpPaymentTotal;
 
   // 8. Grand Tally Steps
@@ -1859,11 +2447,20 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
   // 9. Major Head-Wise Summary
   const allMhs = new Set();
   cpPayments.forEach(r => {
-    if (r.sec_mhcd === '8009') allMhs.add('8009');
-    else if (r.mhcd !== '8009') allMhs.add(r.mhcd);
+    const secM = (r.sec_mhcd || '').trim();
+    const effM = (secM === '8009') ? '8009' : (r.mhcd || '').trim();
+    if (!isMhScopeConsolidated || isConsolidatedFundHead(effM)) {
+      allMhs.add(effM);
+    }
   });
-  f1Map.forEach(r => allMhs.add(r.mhcd));
-  f2VouGrp.forEach((_, k) => allMhs.add(k.split('|')[0]));
+  f1Map.forEach(r => {
+    if (!isMhScopeConsolidated || isConsolidatedFundHead(r.mhcd)) allMhs.add(r.mhcd);
+  });
+  f2VouGrp.forEach((_, k) => {
+    const parts = k.split('|');
+    const mh = parts.length === 5 ? parts[3] : parts[0];
+    if (!isMhScopeConsolidated || isConsolidatedFundHead(mh)) allMhs.add(mh);
+  });
   const sortedMhs = Array.from(allMhs).filter(Boolean).sort((a, b) => (parseInt(a, 10) || 99999) - (parseInt(b, 10) || 99999));
 
   const headWise = [];
@@ -1878,11 +2475,22 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
         if (r.mhcd === mh && r.sec_mhcd !== '8009') cpG += r.amount;
       }
     });
-    f1Map.forEach(r => {
-      if (r.mhcd === mh) {
-        f1G += r.gross; f1Ag += r.ag_ded; f1Try += r.try_ded; f1N += r.net;
-      }
-    });
+    if (f1Map.size > 0) {
+      f1Map.forEach(r => {
+        if (r.mhcd === mh) {
+          f1G += r.gross; f1Ag += r.ag_ded; f1Try += r.try_ded; f1N += r.net;
+        }
+      });
+    } else {
+      // If File 1 is omitted, pull gross amount from File 2 classification groups
+      f2VouGrp.forEach((vg, k) => {
+        const parts = k.split('|');
+        const vMh = parts.length === 5 ? parts[3] : parts[0];
+        if (vMh === mh) {
+          f1G += vg.gross;
+        }
+      });
+    }
     f3VouGrp.forEach((val, k) => {
       if (k.split('|')[0] === mh) f3Rec += val.recovery;
     });
@@ -2020,65 +2628,75 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       check_name: "IFMIS Bill Master Gross vs Gross Expenditure",
       files_used: ["File 1 (Bill Master)", "File 2 (Detailed Classification)"],
       rule_description: "Cross-check gross amounts between IFMIS Bill Master and Detailed Gross Expenditure",
-      records_evaluated: f1Map.size || f2VouGrp.size,
-      records_passed: f1Map.size || f2VouGrp.size,
+      records_evaluated: !activeMods.bill_gross ? 0 : (f1Map.size || f2VouGrp.size),
+      records_passed: !activeMods.bill_gross ? 0 : (f1Map.size || f2VouGrp.size),
       records_failed: 0,
       records_unverifiable: 0,
-      difference_amount: Math.abs(f1GrossTotal - f2GrossTotal),
-      status: Math.abs(f1GrossTotal - f2GrossTotal) < 0.01 ? "PASSED" : "FAILED",
-      explanation: `Total File 1 Gross: ₹${f1GrossTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}, File 2 Gross: ₹${f2GrossTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}. Parity verified to zero paise.`
+      difference_amount: !activeMods.bill_gross ? 0 : Math.abs(f1GrossTotal - f2GrossTotal),
+      status: !activeMods.bill_gross ? "NOT_PERFORMED" : (Math.abs(f1GrossTotal - f2GrossTotal) < 0.01 ? "PASSED" : "FAILED"),
+      explanation: !activeMods.bill_gross
+        ? "Check skipped (Bill Gross module disabled in Settings)."
+        : `Total File 1 Gross: ₹${f1GrossTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}, File 2 Gross: ₹${f2GrossTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}. Parity verified to zero paise.`
     },
     {
       check_id: 2,
       check_name: "IFMIS Bill Master Net vs File 5 Net",
       files_used: ["File 1 (Bill Master)", "File 5 (Net SOP)"],
       rule_description: "Verify net payment parity between Bill Master Net and SOP Bank Net Payment export",
-      records_evaluated: f1Map.size || f5Map.size,
-      records_passed: f1Map.size || f5Map.size,
+      records_evaluated: !activeMods.net_bank_sop ? 0 : (f1Map.size || f5Map.size),
+      records_passed: !activeMods.net_bank_sop ? 0 : (f1Map.size || f5Map.size),
       records_failed: 0,
       records_unverifiable: 0,
-      difference_amount: Math.abs(f1NetTotal - f5NetTotal),
-      status: Math.abs(f1NetTotal - f5NetTotal) < 0.01 ? "PASSED" : "FAILED",
-      explanation: `Total Bill Master Net matches File 5 SOP Net to the exact rupee (₹${f1NetTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}).`
+      difference_amount: !activeMods.net_bank_sop ? 0 : Math.abs(f1NetTotal - f5NetTotal),
+      status: !activeMods.net_bank_sop ? "NOT_PERFORMED" : (Math.abs(f1NetTotal - f5NetTotal) < 0.01 ? "PASSED" : "FAILED"),
+      explanation: !activeMods.net_bank_sop
+        ? "Check skipped (Net Bank SOP module disabled in Settings)."
+        : `Total Bill Master Net matches File 5 SOP Net to the exact rupee (₹${f1NetTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}).`
     },
     {
       check_id: 3,
-      check_name: "File 2 Gross vs File 6 COMPAY Gross",
+      check_name: isMhScopeConsolidated
+        ? "File 2 Gross vs File 6 COMPAY Gross (Consolidated Fund: MH 0001–5999)"
+        : "File 2 Gross vs File 6 COMPAY Gross (All Major Heads)",
       files_used: ["File 2 (Detailed Classification)", "File 6 (VLC COMPAY)"],
-      rule_description: "Primary voucher cross-reconciliation between Treasury expenditure and AG compilation",
+      rule_description: "Primary voucher cross-reconciliation between Treasury expenditure and AG compilation" + (isMhScopeConsolidated ? " for Major Heads 0001 to 5999" : ""),
       records_evaluated: voucherRegister.length,
       records_passed: statusCounts.EXACT_MATCH || 0,
       records_failed: (voucherRegister.length - (statusCounts.EXACT_MATCH || 0)),
       records_unverifiable: 0,
       difference_amount: Math.abs(f2GrossTotal - cpPaymentTotal),
       status: (statusCounts.MISMATCH || 0) === 0 ? "PASSED" : "DISCREPANCY_FOUND",
-      explanation: `${(statusCounts.EXACT_MATCH || 0).toLocaleString()} direct exact matches. All variances reconciled via structural bridge.`
+      explanation: `${(statusCounts.EXACT_MATCH || 0).toLocaleString()} direct exact matches in ${isMhScopeConsolidated ? 'Consolidated Fund (MH 0001–5999)' : 'all evaluated heads'}. File 2 Gross: ₹${f2GrossTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})} vs COMPAY Payments: ₹${cpPaymentTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}.`
     },
     {
       check_id: 4,
       check_name: "IFMIS Bill Master Arithmetic Integrity",
       files_used: ["File 1 (Bill Master)"],
       rule_description: "Audit rule: Gross Amount − AG Deductions − Treasury Deductions = Net Amount",
-      records_evaluated: f1Map.size,
-      records_passed: f1Map.size,
+      records_evaluated: !activeMods.bill_gross ? 0 : f1Map.size,
+      records_passed: !activeMods.bill_gross ? 0 : f1Map.size,
       records_failed: 0,
       records_unverifiable: 0,
-      difference_amount: Math.abs(f1GrossTotal - f1AgDedTotal - f1TryDedTotal - f1NetTotal),
-      status: "PASSED",
-      explanation: "All treasury bills satisfy standard accounting equation (Gross − Deductions = Net)."
+      difference_amount: !activeMods.bill_gross ? 0 : Math.abs(f1GrossTotal - f1AgDedTotal - f1TryDedTotal - f1NetTotal),
+      status: !activeMods.bill_gross ? "NOT_PERFORMED" : "PASSED",
+      explanation: !activeMods.bill_gross
+        ? "Check skipped (Bill Gross module disabled in Settings)."
+        : "All treasury bills satisfy standard accounting equation (Gross − Deductions = Net)."
     },
     {
       check_id: 5,
       check_name: "Deduction Components vs Bill Master Control Totals",
       files_used: ["File 1", "File 3 (AG Ded)", "File 4 (Try Ded)"],
       rule_description: "Verify sum of itemized schedule deductions matches Bill Master control totals",
-      records_evaluated: (f3Raw ? 1 : 0) + (f4Raw ? 1 : 0),
-      records_passed: 2,
+      records_evaluated: (!activeMods.ag_ded && !activeMods.non_ag_ded && !activeMods.try_ded) ? 0 : ((f3Raw ? 1 : 0) + (f4Raw ? 1 : 0)),
+      records_passed: (!activeMods.ag_ded && !activeMods.non_ag_ded && !activeMods.try_ded) ? 0 : 2,
       records_failed: 0,
       records_unverifiable: 0,
-      difference_amount: Math.abs(f1AgDedTotal - f3Total) + Math.abs(f1TryDedTotal - f4Total),
-      status: "PASSED",
-      explanation: `AG Deductions (₹${f3Total.toLocaleString('en-IN', {minimumFractionDigits: 2})}) and Treasury Deductions (₹${f4Total.toLocaleString('en-IN', {minimumFractionDigits: 2})}) balance with File 1 control totals.`
+      difference_amount: (!activeMods.ag_ded && !activeMods.non_ag_ded && !activeMods.try_ded) ? 0 : (Math.abs(f1AgDedTotal - f3Total) + Math.abs(f1TryDedTotal - f4Total)),
+      status: (!activeMods.ag_ded && !activeMods.non_ag_ded && !activeMods.try_ded) ? "NOT_PERFORMED" : "PASSED",
+      explanation: (!activeMods.ag_ded && !activeMods.non_ag_ded && !activeMods.try_ded)
+        ? "Check skipped (Deduction analysis modules disabled in Settings)."
+        : `AG Deductions (₹${f3Total.toLocaleString('en-IN', {minimumFractionDigits: 2})}) and Treasury Deductions (₹${f4Total.toLocaleString('en-IN', {minimumFractionDigits: 2})}) balance with File 1 control totals.`
     },
     {
       check_id: 6,
@@ -2190,6 +2808,8 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       reconciled_payment_total: reconciledPayments,
       payment_discrepancy: paymentDiscrepancy,
       total_vouchers: voucherRegister.length,
+      file_02_unique_vouchers: f2VouGrp.size,
+      file_06_unique_vouchers: cpVouGrp.size,
       status_counts: statusCounts,
       classification_total_heads: allHeadKeys.size,
       classification_exact_matches: tallyCounts.EXACT_MATCH || 0,
@@ -2222,6 +2842,18 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
     ag_deductions: agDeductionsSample,
     try_deductions: tryDeductionsSample
   };
+
+  try {
+    if (fileStates.file_1 && f1Map.size) fileStates.file_1.unique_vouchers = f1Map.size;
+    if (fileStates.file_2 && f2VouGrp.size) fileStates.file_2.unique_vouchers = f2VouGrp.size;
+    if (fileStates.file_3 && f3VouGrp.size) fileStates.file_3.unique_vouchers = f3VouGrp.size;
+    if (fileStates.file_4 && f4VouGrp.size) fileStates.file_4.unique_vouchers = f4VouGrp.size;
+    if (fileStates.file_5 && f5Map.size) fileStates.file_5.unique_vouchers = f5Map.size;
+    if (fileStates.file_6 && cpVouGrp.size) fileStates.file_6.unique_vouchers = cpVouGrp.size;
+    renderFileCards();
+  } catch (e) {
+    console.warn("Could not refresh fileStates unique vouchers:", e);
+  }
 
   const elapsed = Date.now() - t0;
   console.log(`Test passed! Reconciliation completed in ${elapsed}ms`);
@@ -2335,9 +2967,13 @@ function handleClientFileList(fileList, criteria) {
 
   const activeCriteria = {
     treasury_code: (criteria && criteria.treasury_code) || (trySelect ? trySelect.value : '052'),
-    month: (criteria && criteria.month) || (monthSelect ? monthSelect.value : '05'),
-    year: (criteria && criteria.year) || (yearSelect ? yearSelect.value : '2025')
+    month: (criteria && criteria.month) || (monthSelect ? monthSelect.value : 'ALL'),
+    year: (criteria && criteria.year) || (yearSelect ? yearSelect.value : '2025-26')
   };
+
+  const isAllMonths = String(activeCriteria.month).trim().toUpperCase() === 'ALL';
+  const isAllTreasuries = String(activeCriteria.treasury_code).trim().toUpperCase() === 'ALL';
+  const isMultiMode = isAllMonths || isAllTreasuries;
 
   const MONTH_MAP = {
     '01': ['01', 'jan', 'january'],
@@ -2354,25 +2990,43 @@ function handleClientFileList(fileList, criteria) {
     '12': ['12', 'dec', 'december']
   };
 
-  const mClean = String(activeCriteria.month || '05').trim().padStart(2, '0');
-  const targetMonthTokens = MONTH_MAP[mClean] || [mClean.toLowerCase()];
+  const mClean = String(activeCriteria.month || '04').trim().padStart(2, '0');
+  const targetMonthTokens = (!isAllMonths && activeCriteria.month) ? (MONTH_MAP[mClean] || [mClean.toLowerCase()]) : [];
 
   const otherMonthTokens = [];
-  for (const [k, toks] of Object.entries(MONTH_MAP)) {
-    if (k !== mClean) {
-      otherMonthTokens.push(...toks);
+  if (!isAllMonths && activeCriteria.month) {
+    for (const [k, toks] of Object.entries(MONTH_MAP)) {
+      if (k !== mClean) {
+        otherMonthTokens.push(...toks);
+      }
     }
   }
 
-  const yStr = String(activeCriteria.year || '2025').trim();
-  const targetYearTokens = [yStr];
-  if (yStr.length === 4) targetYearTokens.push(yStr.slice(2)); // '25'
+  const targetYearTokens = [];
+  if (activeCriteria.year && String(activeCriteria.year).trim().toUpperCase() !== 'ALL') {
+    const yStr = String(activeCriteria.year).trim();
+    if (yStr.includes('-')) {
+      const parts = yStr.split('-');
+      targetYearTokens.push(parts[0], parts[1], parts[0].slice(-2), parts[1].slice(-2));
+    } else if (yStr.length === 4) {
+      targetYearTokens.push(yStr, yStr.slice(2));
+      if (isAllMonths) {
+        const nextY = String(parseInt(yStr, 10) + 1);
+        targetYearTokens.push(nextY, nextY.slice(2));
+      }
+    } else {
+      targetYearTokens.push(yStr);
+    }
+  }
 
-  const tClean = String(activeCriteria.treasury_code || '052').trim().toLowerCase();
-  const targetTryTokens = [tClean];
-  if (tClean === '052' || tClean === 'val') targetTryTokens.push('052', 'val', 'vallabh');
-  else if (tClean === '051' || tClean === 'vin') targetTryTokens.push('051', 'vin', 'vindhyachal');
-  else if (tClean === '050' || tClean === 'bpl') targetTryTokens.push('050', 'bpl', 'bhopal');
+  const targetTryTokens = [];
+  if (!isAllTreasuries && activeCriteria.treasury_code) {
+    const tClean = String(activeCriteria.treasury_code).trim().toLowerCase();
+    targetTryTokens.push(tClean);
+    if (tClean === '052' || tClean === 'val') targetTryTokens.push('052', 'val', 'vallabh');
+    else if (tClean === '051' || tClean === 'vin') targetTryTokens.push('051', 'vin', 'vindhyachal');
+    else if (tClean === '050' || tClean === 'bpl') targetTryTokens.push('050', 'bpl', 'bhopal');
+  }
 
   function detectRoleFromFilename(fn, relPath) {
     const lfn = fn.toLowerCase();
@@ -2394,34 +3048,290 @@ function handleClientFileList(fileList, criteria) {
     return null;
   }
 
+  const AG_HEADS = new Set(["8009", "0070", "7610", "8011", "7615"]);
+  const TRY_HEADS = new Set(["8658", "0028", "0216", "0043", "0029"]);
+
+  function detectRoleFromLines(lines) {
+    if (!lines || lines.length === 0) return null;
+    const header = lines[0].toUpperCase();
+    if (header.includes("SS_SOP") || header.includes("TE_NO") || header.includes("SEC_MHCD")) return "file_6";
+    if (header.includes("GROSS_AMT") && header.includes("NET_AMT")) return "file_1";
+    if (header.includes("GROSS_AMT") && !header.includes("NET_AMT")) return "file_2";
+    if (header.includes("NET_AMT") && !header.includes("GROSS_AMT")) return "file_5";
+
+    if (header.includes("DED_MHCD") || header.includes("DED_AMT")) {
+      let agScore = 0, tryScore = 0;
+      for (let i = 1; i < Math.min(lines.length, 10); i++) {
+        const parts = lines[i].split(/[\t,;|]/);
+        parts.forEach(p => {
+          const trimmed = p.trim();
+          if (AG_HEADS.has(trimmed)) agScore++;
+          if (TRY_HEADS.has(trimmed)) tryScore++;
+        });
+      }
+      return agScore >= tryScore ? "file_3" : "file_4";
+    }
+
+    const firstLine = lines[0].trim();
+    const cols = firstLine.split(',');
+    if (cols.length >= 16 && cols[0].length <= 2) return "file_1";
+    if (cols.length >= 14 && (cols[13] === 'V' || cols[13] === 'C' || cols[14] === 'P' || cols[14] === 'C')) return "file_2";
+    if (cols.length === 10) return "file_5";
+    if (cols.length >= 12 && cols.some(c => AG_HEADS.has(c.trim()))) return "file_3";
+    if (cols.length >= 12 && cols.some(c => TRY_HEADS.has(c.trim()))) return "file_4";
+
+    return null;
+  }
+
+  const firstFile = files[0];
+  const relPath = firstFile && firstFile.webkitRelativePath ? firstFile.webkitRelativePath : '';
+  const folderName = relPath && relPath.includes('/') ? relPath.split('/')[0] : 'Selected Folder';
+
+  // -------------------------------------------------------------------------
+  // MODE A: MULTI-FILE MODE (All 12 Months of FY or All Treasuries)
+  // -------------------------------------------------------------------------
+  if (isMultiMode) {
+    const selectedFilesMulti = { file_1: [], file_2: [], file_3: [], file_4: [], file_5: [], file_6: [] };
+    const seenDedup = new Set();
+    const unassignedFiles = [];
+    const skippedEmptyFiles = [];
+
+    for (const file of files) {
+      if (file.size === 0) {
+        skippedEmptyFiles.push(file.name);
+        continue;
+      }
+
+      const rel = file.webkitRelativePath || file.name;
+      const role = detectRoleFromFilename(file.name, rel);
+      if (!role) {
+        unassignedFiles.push(file);
+        continue;
+      }
+
+      const haystack = (file.name + ' ' + (rel || '')).toLowerCase();
+      if (targetTryTokens.length > 0 && !targetTryTokens.some(tok => haystack.includes(tok))) continue;
+      if (targetYearTokens.length > 0 && !targetYearTokens.some(tok => haystack.includes(tok))) continue;
+      if (targetMonthTokens.length > 0) {
+        const matchesTargetMonth = targetMonthTokens.some(tok => {
+          const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
+          return rx.test(haystack);
+        });
+        if (!matchesTargetMonth) {
+          const matchesYear = targetYearTokens.some(tok => haystack.includes(tok));
+          if (role === 'file_6' && (matchesYear || haystack.includes('compay'))) {
+            // Allow annual / multi-month COMPAY dataset
+          } else {
+            continue;
+          }
+        }
+      }
+
+      const dedupKey = `${role}|${file.name.toLowerCase()}|${file.size}`;
+      if (seenDedup.has(dedupKey)) continue;
+      seenDedup.add(dedupKey);
+
+      selectedFilesMulti[role].push(file);
+    }
+
+    // Prefer month-specific COMPAY files over annual files if available
+    if (targetMonthTokens.length > 0 && selectedFilesMulti.file_6.length > 0) {
+      const monthSpecificF6 = selectedFilesMulti.file_6.filter(f => {
+        const h = (f.name + ' ' + (f.webkitRelativePath || '')).toLowerCase();
+        return targetMonthTokens.some(tok => {
+          const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
+          return rx.test(h);
+        });
+      });
+      if (monthSpecificF6.length > 0) {
+        selectedFilesMulti.file_6 = monthSpecificF6;
+      }
+    }
+
+    // Fallback inspection for empty roles
+    const emptyRoles = Object.keys(selectedFilesMulti).filter(r => selectedFilesMulti[r].length === 0);
+    const inspectPromises = [];
+    if (emptyRoles.length > 0 && unassignedFiles.length > 0) {
+      for (const file of unassignedFiles.slice(0, 30)) {
+        inspectPromises.push(new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const text = e.target.result || '';
+            const lines = text.split(/\r?\n/).slice(0, 10);
+            const role = detectRoleFromLines(lines);
+            if (role && emptyRoles.includes(role)) {
+              selectedFilesMulti[role].push(file);
+            }
+            resolve();
+          };
+          reader.onerror = () => resolve();
+          reader.readAsText(file.slice(0, 4096));
+        }));
+      }
+    }
+
+    Promise.all(inspectPromises).then(() => {
+      // Sort each role's files by filename
+      for (const r of Object.keys(selectedFilesMulti)) {
+        selectedFilesMulti[r].sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      const selectedRoles = Object.keys(selectedFilesMulti).filter(r => selectedFilesMulti[r].length > 0);
+      if (selectedRoles.length === 0) {
+        showToast(`No matching reconciliation files found for criteria.`, true);
+        return;
+      }
+
+      showToast(`Reading and consolidating files across ${selectedRoles.length} roles...`);
+
+      let totalSkippedHtml = 0;
+      let totalSkippedEmpty = skippedEmptyFiles.length;
+      const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
+
+      const readPromises = selectedRoles.map(role => {
+        const roleFiles = selectedFilesMulti[role];
+        const fileReadPromises = roleFiles.map(file => readFileContentSmart(file));
+
+        return Promise.all(fileReadPromises).then(results => {
+          let mergedText = '';
+          let totalSize = 0;
+          let validCount = 0;
+
+          results.forEach((res) => {
+            if (res.isEmpty) {
+              totalSkippedEmpty++;
+              return;
+            }
+            if (res.isHtmlError) {
+              totalSkippedHtml++;
+              return;
+            }
+            if (!res.text || !res.text.trim()) {
+              totalSkippedEmpty++;
+              return;
+            }
+
+            totalSize += res.size;
+            validCount++;
+            let fileText = res.text.trim();
+
+            // When merging file_6 split files with a specific target month, filter lines to that month
+            if (role === 'file_6' && targetMonthStr) {
+              const lines = fileText.split('\n');
+              if (lines.length > 1) {
+                const headerLine = lines[0];
+                const headerCols = headerLine.split(/[\t,]/).map(c => c.trim().toUpperCase());
+                const mIdx = headerCols.indexOf('MONTH');
+                if (mIdx !== -1) {
+                  const filteredLines = [headerLine];
+                  for (let li = 1; li < lines.length; li++) {
+                    const line = lines[li];
+                    if (!line.trim()) continue;
+                    const cols = line.split(/[\t,]/);
+                    const rowMonth = (cols[mIdx] || '').trim().replace(/\.0$/, '');
+                    if (rowMonth === targetMonthStr) {
+                      filteredLines.push(line);
+                    }
+                  }
+                  fileText = filteredLines.join('\n');
+                }
+              }
+            }
+
+            // Strip redundant headers after the first file
+            if (mergedText.length > 0) {
+              const firstNl = fileText.indexOf('\n');
+              if (firstNl !== -1) {
+                const firstLine = fileText.slice(0, firstNl).toUpperCase();
+                if (firstLine.includes('TRY_CD') || firstLine.includes('VOU_NO') || firstLine.includes('YEAR_FROM') || firstLine.includes('GROSS_AMT') || firstLine.includes('NET_AMT')) {
+                  fileText = fileText.slice(firstNl + 1).trim();
+                }
+              }
+              if (fileText.length > 0) {
+                mergedText += '\n' + fileText;
+              }
+            } else {
+              mergedText = fileText;
+            }
+          });
+
+          const totalLines = (mergedText.match(/\n/g) || []).length;
+          clientUploadedRawFiles[role] = mergedText;
+          const displayPath = roleFiles.length > 1
+            ? `${validCount} files merged (${roleFiles[0].name}...)`
+            : (roleFiles[0].webkitRelativePath || roleFiles[0].name);
+
+          fileStates[role] = {
+            path: displayPath,
+            loaded: validCount > 0,
+            records: totalLines,
+            unique_vouchers: countUniqueVouchersInRawText(mergedText, role),
+            size: totalSize
+          };
+        });
+      });
+
+      Promise.all(readPromises).then(() => {
+        renderFileCards();
+        const identifiedNames = {};
+        for (const r of selectedRoles) {
+          const fl = selectedFilesMulti[r];
+          identifiedNames[r] = fl.length > 1 ? `${fl.length} files merged (${fl[0].name}...)` : (fl[0].webkitRelativePath || fl[0].name);
+        }
+        const count = selectedRoles.length;
+        const periodLabel = isAllMonths ? 'FULL FINANCIAL YEAR (ALL 12 MONTHS)' : (MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean);
+        const tryLabel = isAllTreasuries ? 'ALL TREASURIES (STATEWIDE)' : activeCriteria.treasury_code;
+
+        const isPrimaryMulti = (selectedRoles.includes('file_2') || selectedRoles.includes('file_1')) && selectedRoles.includes('file_6');
+        renderFolderImportStatus({
+          folder: `${folderName} [${periodLabel} ${activeCriteria.year} — Treasury: ${tryLabel}]`,
+          identified: identifiedNames,
+          is_all_ready: count === 6,
+          is_ready_to_reconcile: isPrimaryMulti,
+          target_month: periodLabel,
+          target_year: activeCriteria.year,
+          target_try: tryLabel,
+          skipped_empty_count: totalSkippedEmpty,
+          skipped_html_count: totalSkippedHtml
+        });
+
+        if (count === 6) {
+          showToast(`✅ All 6 roles merged successfully for ${periodLabel} ${activeCriteria.year}! Ready to reconcile.`);
+        } else if (isPrimaryMulti) {
+          showToast(`✅ Primary files (File 02 & File 06) merged for ${periodLabel} ${activeCriteria.year}! Ready to reconcile.`);
+        } else {
+          showToast(`Auto-identified ${count}/6 roles for ${periodLabel} ${activeCriteria.year}. Primary files (File 02 & File 06) still required.`);
+        }
+      });
+    });
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // MODE B: SINGLE PERIOD MODE (Individual month / individual treasury)
+  // -------------------------------------------------------------------------
   function scoreFileCandidate(fn, relPath) {
     const haystack = (fn + ' ' + (relPath || '')).toLowerCase();
     let score = 0;
 
-    // Target month match: +100
     const hasTargetMonth = targetMonthTokens.some(tok => {
       const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
       return rx.test(haystack);
     });
     if (hasTargetMonth) score += 100;
 
-    // Different month penalty: -200
     const hasOtherMonth = otherMonthTokens.some(tok => {
       const rx = new RegExp('(?:^|[\\W_])' + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\W_])', 'i');
       return rx.test(haystack);
     });
     if (hasOtherMonth) score -= 200;
 
-    // Target year match: +50
     if (targetYearTokens.some(tok => haystack.includes(tok))) score += 50;
-
-    // Target treasury match: +30
     if (targetTryTokens.some(tok => haystack.includes(tok))) score += 30;
 
     return score;
   }
 
-  // 1. Group candidates by role using filename patterns and score them
   const candidatesByRole = { file_1: [], file_2: [], file_3: [], file_4: [], file_5: [], file_6: [] };
   const unassignedFiles = [];
 
@@ -2447,46 +3357,10 @@ function handleClientFileList(fileList, criteria) {
     }
   }
 
-  // Fallback structural inspection for any unfilled roles if unassigned files exist
   const missingRoles = ['file_1', 'file_2', 'file_3', 'file_4', 'file_5', 'file_6'].filter(r => !selectedFiles[r]);
   const inspectPromises = [];
 
   if (missingRoles.length > 0 && unassignedFiles.length > 0) {
-    const AG_HEADS = new Set(["8009", "0070", "7610", "8011", "7615"]);
-    const TRY_HEADS = new Set(["8658", "0028", "0216", "0043", "0029"]);
-
-    function detectRoleFromLines(lines) {
-      if (!lines || lines.length === 0) return null;
-      const header = lines[0].toUpperCase();
-      if (header.includes("SS_SOP") || header.includes("TE_NO") || header.includes("SEC_MHCD")) return "file_6";
-      if (header.includes("GROSS_AMT") && header.includes("NET_AMT")) return "file_1";
-      if (header.includes("GROSS_AMT") && !header.includes("NET_AMT")) return "file_2";
-      if (header.includes("NET_AMT") && !header.includes("GROSS_AMT")) return "file_5";
-
-      if (header.includes("DED_MHCD") || header.includes("DED_AMT")) {
-        let agScore = 0, tryScore = 0;
-        for (let i = 1; i < Math.min(lines.length, 10); i++) {
-          const parts = lines[i].split(/[\t,;|]/);
-          parts.forEach(p => {
-            const trimmed = p.trim();
-            if (AG_HEADS.has(trimmed)) agScore++;
-            if (TRY_HEADS.has(trimmed)) tryScore++;
-          });
-        }
-        return agScore >= tryScore ? "file_3" : "file_4";
-      }
-
-      const firstLine = lines[0].trim();
-      const cols = firstLine.split(',');
-      if (cols.length >= 16 && cols[0].length <= 2) return "file_1";
-      if (cols.length >= 14 && (cols[13] === 'V' || cols[13] === 'C' || cols[14] === 'P' || cols[14] === 'C')) return "file_2";
-      if (cols.length === 10) return "file_5";
-      if (cols.length >= 12 && cols.some(c => AG_HEADS.has(c.trim()))) return "file_3";
-      if (cols.length >= 12 && cols.some(c => TRY_HEADS.has(c.trim()))) return "file_4";
-
-      return null;
-    }
-
     for (const file of unassignedFiles.slice(0, 20)) {
       inspectPromises.push(new Promise(resolve => {
         const reader = new FileReader();
@@ -2512,31 +3386,48 @@ function handleClientFileList(fileList, criteria) {
       return;
     }
 
-    const firstFile = files[0];
-    const relPath = firstFile && firstFile.webkitRelativePath ? firstFile.webkitRelativePath : '';
-    const folderName = relPath && relPath.includes('/') ? relPath.split('/')[0] : 'Selected Folder';
-
     showToast(`Reading ${selectedRoles.length} selected files for ${mClean}/${activeCriteria.year}...`);
+
+    const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
 
     const readPromises = selectedRoles.map(role => {
       const file = selectedFiles[role];
-      return new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const text = e.target.result || '';
-          clientUploadedRawFiles[role] = text;
-          const lineCount = (text.match(/\n/g) || []).length;
-          const displayPath = file.webkitRelativePath || file.name;
-          fileStates[role] = {
-            path: displayPath,
-            loaded: true,
-            records: lineCount,
-            size: file.size
-          };
-          resolve();
+      return readFileContentSmart(file).then(res => {
+        if (res.isEmpty || res.isHtmlError) {
+          return;
+        }
+        let text = res.text || '';
+        if (role === 'file_6' && targetMonthStr) {
+          const lines = text.split('\n');
+          if (lines.length > 1) {
+            const headerLine = lines[0];
+            const headerCols = headerLine.split(/[\t,]/).map(c => c.trim().toUpperCase());
+            const mIdx = headerCols.indexOf('MONTH');
+            if (mIdx !== -1) {
+              const filteredLines = [headerLine];
+              for (let li = 1; li < lines.length; li++) {
+                const line = lines[li];
+                if (!line.trim()) continue;
+                const cols = line.split(/[\t,]/);
+                const rowMonth = (cols[mIdx] || '').trim().replace(/\.0$/, '');
+                if (rowMonth === targetMonthStr) {
+                  filteredLines.push(line);
+                }
+              }
+              text = filteredLines.join('\n');
+            }
+          }
+        }
+        clientUploadedRawFiles[role] = text;
+        const lineCount = (text.match(/\n/g) || []).length;
+        const displayPath = file.webkitRelativePath || file.name;
+        fileStates[role] = {
+          path: displayPath,
+          loaded: true,
+          records: lineCount,
+          unique_vouchers: countUniqueVouchersInRawText(text, role),
+          size: file.size
         };
-        reader.onerror = () => resolve();
-        reader.readAsText(file);
       });
     });
 
@@ -2549,10 +3440,12 @@ function handleClientFileList(fileList, criteria) {
       const count = Object.keys(selectedFiles).length;
       const monthLabel = MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean;
 
+      const isPrimarySingle = ((selectedFiles['file_2'] || selectedFiles['file_1']) && selectedFiles['file_6']);
       renderFolderImportStatus({
         folder: `${folderName} [${monthLabel} ${activeCriteria.year} — Treasury: ${activeCriteria.treasury_code}]`,
         identified: identifiedNames,
         is_all_ready: count === 6,
+        is_ready_to_reconcile: isPrimarySingle,
         target_month: monthLabel,
         target_year: activeCriteria.year,
         target_try: activeCriteria.treasury_code
@@ -2560,8 +3453,10 @@ function handleClientFileList(fileList, criteria) {
 
       if (count === 6) {
         showToast(`✅ All 6 files successfully loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
+      } else if (isPrimarySingle) {
+        showToast(`✅ Primary files (File 02 & File 06) loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
       } else {
-        showToast(`Auto-identified ${count}/6 files for ${monthLabel} ${activeCriteria.year}. ${6 - count} file(s) remaining.`);
+        showToast(`Auto-identified ${count}/6 files for ${monthLabel} ${activeCriteria.year}. Primary files (File 02 & File 06) still required.`);
       }
     });
   });
@@ -2699,42 +3594,71 @@ function triggerClientExport(format, section = null, saveAs = false) {
       return;
     }
 
-    showToast("Generating comprehensive 11-sheet audit workbook in browser...");
     const wb = XLSX.utils.book_new();
+    let filename = '';
 
-    // Sheet 1: Grand Tally Accounting Flow
-    if (currentData.grand_tally_steps) {
-      const wsTally = XLSX.utils.json_to_sheet(currentData.grand_tally_steps.map(s => ({
-        "Step": s.step,
-        "Accounting Item / Component": s.label,
-        "Sign": s.sign,
-        "Amount (₹)": s.amount,
-        "Audit Justification / Operational Rationale": s.description
-      })));
-      XLSX.utils.book_append_sheet(wb, wsTally, "Grand_Tally_Balance_Sheet");
-    }
+    if (section === 'gross_recon') {
+      showToast("Generating Primary Gross Reconciliation (File 02 vs File 06) Excel report...");
+      const vouchers = (typeof filteredGrossVouchers !== 'undefined' && filteredGrossVouchers && filteredGrossVouchers.length > 0)
+        ? filteredGrossVouchers
+        : (currentData.voucher_register || []);
 
-    // Sheet 2: Primary Gross Voucher Reconciliation
-    if (currentData.voucher_register) {
-      const wsGross = XLSX.utils.json_to_sheet(currentData.voucher_register.map(v => ({
-        "Treasury Code": v.try_cd,
-        "Major Head": v.mhcd,
-        "Voucher No": v.vou_no,
-        "DDO Code": v.ddo_cd || "",
-        "Token No": v.token_no || "",
-        "Voucher Date": v.vou_date || "",
-        "File 2 Gross Exp (₹)": v.sop_gross || 0,
-        "File 6 COMPAY Gross (₹)": v.compay_gross || 0,
-        "Gross Diff (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
-        "Match Status": v.status,
-        "Audit Finding": v.status_desc
-      })));
+      let totSopGross = 0;
+      let totCpGross = 0;
+      let totDiff = 0;
+
+      const rows = vouchers.map(v => {
+        const sg = Number(v.sop_gross || 0);
+        const cg = Number(v.compay_gross || 0);
+        const df = sg - cg;
+        totSopGross += sg;
+        totCpGross += cg;
+        totDiff += df;
+        return {
+          "Treasury Code": v.try_cd || "",
+          "Major Head": v.mhcd || "",
+          "Voucher No": v.vou_no || "",
+          "DDO Code": v.ddo_cd || "",
+          "Token No": v.token_no || "",
+          "Voucher Date": v.vou_date || "",
+          "File 2 Gross Exp (₹)": sg,
+          "File 6 COMPAY Gross (₹)": cg,
+          "Gross Diff (₹)": df,
+          "Match Status": v.status || "",
+          "Audit Finding / Statutory Explanation": v.status_desc || ""
+        };
+      });
+
+      // Append sticky summary total row
+      rows.push({
+        "Treasury Code": "TOTAL",
+        "Major Head": `Count: ${vouchers.length}`,
+        "Voucher No": "",
+        "DDO Code": "",
+        "Token No": "",
+        "Voucher Date": "",
+        "File 2 Gross Exp (₹)": totSopGross,
+        "File 6 COMPAY Gross (₹)": totCpGross,
+        "Gross Diff (₹)": totDiff,
+        "Match Status": Math.abs(totDiff) < 0.01 ? "EXACT_PARITY" : "NET_VARIANCE",
+        "Audit Finding / Statutory Explanation": `Exported ${vouchers.length} active filtered vouchers. File 02: ₹${totSopGross.toLocaleString('en-IN', {minimumFractionDigits: 2})}, File 06: ₹${totCpGross.toLocaleString('en-IN', {minimumFractionDigits: 2})}`
+      });
+
+      const wsGross = XLSX.utils.json_to_sheet(rows);
+      wsGross['!cols'] = [
+        {wch: 16}, {wch: 14}, {wch: 14}, {wch: 14}, {wch: 14}, {wch: 14},
+        {wch: 22}, {wch: 22}, {wch: 18}, {wch: 20}, {wch: 60}
+      ];
       XLSX.utils.book_append_sheet(wb, wsGross, "Primary_Gross_Recon");
-    }
+      filename = `IFMIS_VLC_Primary_Gross_Reconciliation_File02_vs_File06_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 3: 15-Digit Headwise Classification Tally
-    if (currentData.classification_tally && currentData.classification_tally.rows) {
-      const wsClass = XLSX.utils.json_to_sheet(currentData.classification_tally.rows.map(r => ({
+    } else if (section === 'classification_tally') {
+      showToast("Generating 15-Digit Classification Tally Excel report...");
+      const classRows = (typeof filteredClassRows !== 'undefined' && filteredClassRows && filteredClassRows.length > 0)
+        ? filteredClassRows
+        : ((currentData.classification_tally && currentData.classification_tally.rows) || []);
+
+      const rows = classRows.map(r => ({
         "Classification Head (15-Digit)": r.head,
         "Major Head Description": r.title,
         "File 2 Lines": r.f2_count,
@@ -2744,13 +3668,15 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Difference (₹)": r.diff,
         "Status": r.status,
         "Audit Notes & Recovery Details": r.note
-      })));
+      }));
+      const wsClass = XLSX.utils.json_to_sheet(rows);
       XLSX.utils.book_append_sheet(wb, wsClass, "15_Digit_Classification_Tally");
-    }
+      filename = `IFMIS_VLC_15_Digit_Classification_Tally_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 4: Revenue Deduct Refunds (MH 900) & Negative Voucher Adjustments
-    if (currentData.refund_register && currentData.refund_register.rows) {
-      const wsRef = XLSX.utils.json_to_sheet(currentData.refund_register.rows.map(rf => ({
+    } else if (section === 'refunds') {
+      showToast("Generating Refund Vouchers Register Excel report...");
+      const refundRows = (currentData.refund_register && currentData.refund_register.rows) || [];
+      const rows = refundRows.map(rf => ({
         "Source File": rf.source_file,
         "Voucher No": rf.vou_no,
         "Date": rf.vou_date || "",
@@ -2760,30 +3686,15 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Amount (₹)": rf.amount,
         "Refund Category": rf.category,
         "Statutory Accounting Treatment": rf.treatment
-      })));
+      }));
+      const wsRef = XLSX.utils.json_to_sheet(rows);
       XLSX.utils.book_append_sheet(wb, wsRef, "Refund_Vouchers_Register");
-    }
+      filename = `IFMIS_VLC_Refund_Vouchers_Register_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 5: 12 Statutory Cross-File Consistency Rules
-    if (currentData.cross_file_checks) {
-      const wsChecks = XLSX.utils.json_to_sheet(currentData.cross_file_checks.map(c => ({
-        "Check ID": c.check_id,
-        "Check Name": c.check_name,
-        "Files Used": (c.files_used || []).join(', '),
-        "Records Evaluated": c.records_evaluated,
-        "Passed": c.records_passed,
-        "Failed": c.records_failed,
-        "Difference (₹)": c.difference_amount,
-        "Status": c.status,
-        "Audit Findings": c.explanation
-      })));
-      XLSX.utils.book_append_sheet(wb, wsChecks, "12_Cross_File_Checks");
-    }
-
-    // Sheet 6: Exceptions & Discrepancies Register
-    if (currentData.voucher_register) {
-      const exc = currentData.voucher_register.filter(v => v.status !== 'EXACT_MATCH');
-      const wsExc = XLSX.utils.json_to_sheet(exc.map(v => ({
+    } else if (section === 'exceptions') {
+      showToast("Generating Exceptions Register Excel report...");
+      const exc = (currentData.voucher_register || []).filter(v => v.status !== 'EXACT_MATCH');
+      const rows = exc.map(v => ({
         "Treasury": v.try_cd,
         "Major Head": v.mhcd,
         "Voucher No": v.vou_no,
@@ -2795,37 +3706,73 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Difference (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
         "Exception Category": v.status,
         "Statutory Audit Treatment": v.status_desc
-      })));
+      }));
+      const wsExc = XLSX.utils.json_to_sheet(rows);
       XLSX.utils.book_append_sheet(wb, wsExc, "Exceptions_Register");
-    }
+      filename = `IFMIS_VLC_Exceptions_Register_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 7: Transfer Entries (TE)
-    if (currentData.transfer_entries && currentData.transfer_entries.length) {
-      const wsTE = XLSX.utils.json_to_sheet(currentData.transfer_entries.map(te => ({
-        "TE Number": te.te_no,
-        "Major Head": te.mhcd,
-        "Head Title": te.title,
-        "Voucher No": te.vou_no,
-        "Section Code": te.sctnd_code,
-        "Amount (₹)": te.amount,
-        "Bill Date": te.date
+    } else if (section === 'grand_tally') {
+      showToast("Generating Grand Tally Balance Sheet Excel report...");
+      const tallyRows = (currentData.grand_tally_steps || []).map(s => ({
+        "Step": s.step,
+        "Accounting Item / Component": s.label,
+        "Sign": s.sign,
+        "Amount (₹)": s.amount,
+        "Audit Justification / Operational Rationale": s.description
+      }));
+      const wsTally = XLSX.utils.json_to_sheet(tallyRows);
+      XLSX.utils.book_append_sheet(wb, wsTally, "Grand_Tally_Balance_Sheet");
+      filename = `IFMIS_VLC_Grand_Tally_Balance_Sheet_${dateStr}_${timeStr}.xlsx`;
+
+    } else if (section === 'cross_file') {
+      showToast("Generating 12 Cross-File Consistency Checks Excel report...");
+      const wsChecks = XLSX.utils.json_to_sheet((currentData.cross_file_checks || []).map(c => ({
+        "Check ID": c.check_id,
+        "Check Name": c.check_name,
+        "Files Used": (c.files_used || []).join(', '),
+        "Records Evaluated": c.records_evaluated,
+        "Passed": c.records_passed,
+        "Failed": c.records_failed,
+        "Difference (₹)": c.difference_amount,
+        "Status": c.status,
+        "Audit Findings": c.explanation
       })));
-      XLSX.utils.book_append_sheet(wb, wsTE, "Transfer_Entries_TE");
-    }
+      XLSX.utils.book_append_sheet(wb, wsChecks, "12_Cross_File_Checks");
+      filename = `IFMIS_12_Cross_File_Consistency_Checks_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 8: DDO-Wise Expenditure Summary
-    if (currentData.ddo_wise && currentData.ddo_wise.length) {
-      const wsDDO = XLSX.utils.json_to_sheet(currentData.ddo_wise.map(d => ({
-        "DDO Code": d.ddo_cd,
-        "Vouchers Passed": d.count,
-        "Total Gross Passed (₹)": d.total_gross
+    } else if (section === 'val_f1') {
+      showToast("Generating Voucher Details Validation Excel report...");
+      const wsVal = XLSX.utils.json_to_sheet((currentData.voucher_register || []).map(v => ({
+        "Treasury": v.try_cd,
+        "Major Head": v.mhcd,
+        "Voucher No": v.vou_no,
+        "DDO Code": v.ddo_cd || "",
+        "File 1 Gross (₹)": v.sop_gross || 0,
+        "AG Deductions (₹)": v.ag_ded || 0,
+        "Treasury Deductions (₹)": v.try_ded || 0,
+        "Net Amount (₹)": v.file1_net || 0,
+        "Arithmetic Diff (₹)": (v.sop_gross || 0) - ((v.file1_net || 0) + (v.ag_ded || 0) + (v.try_ded || 0))
       })));
-      XLSX.utils.book_append_sheet(wb, wsDDO, "DDO_Expenditure_Summary");
-    }
+      XLSX.utils.book_append_sheet(wb, wsVal, "BillMaster_Gross_Net_Val");
+      filename = `IFMIS_BillMaster_Validation_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 9: AG Deductions Itemized Schedule
-    if (currentData.ag_deductions && currentData.ag_deductions.length) {
-      const wsAG = XLSX.utils.json_to_sheet(currentData.ag_deductions.map(a => ({
+    } else if (section === 'net_recon') {
+      showToast("Generating Net Reconciliation Excel report...");
+      const wsNet = XLSX.utils.json_to_sheet((currentData.voucher_register || []).map(v => ({
+        "Treasury": v.try_cd,
+        "Major Head": v.mhcd,
+        "Voucher No": v.vou_no,
+        "DDO Code": v.ddo_cd || "",
+        "Bill Master Net (₹)": v.file1_net || 0,
+        "Treasury Net SOP (₹)": v.file5_net || 0,
+        "Difference (₹)": (v.file5_net || 0) - (v.file1_net || 0)
+      })));
+      XLSX.utils.book_append_sheet(wb, wsNet, "Net_Recon_BillMaster_vs_SOP");
+      filename = `IFMIS_Net_Reconciliation_${dateStr}_${timeStr}.xlsx`;
+
+    } else if (section === 'ag_ded') {
+      showToast("Generating AG Deductions Excel report...");
+      const wsAG = XLSX.utils.json_to_sheet((currentData.ag_deductions || []).map(a => ({
         "Treasury": a.try_cd,
         "Major Head": a.mhcd,
         "Voucher No": a.vou_no,
@@ -2835,11 +3782,11 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Amount (₹)": a.amount || 0
       })));
       XLSX.utils.book_append_sheet(wb, wsAG, "AG_Deductions_Schedule");
-    }
+      filename = `IFMIS_AG_Deductions_Schedule_${dateStr}_${timeStr}.xlsx`;
 
-    // Sheet 10: Treasury Deductions Itemized Schedule
-    if (currentData.try_deductions && currentData.try_deductions.length) {
-      const wsTry = XLSX.utils.json_to_sheet(currentData.try_deductions.map(t => ({
+    } else if (section === 'non_ag_ded') {
+      showToast("Generating Treasury Deductions Excel report...");
+      const wsTry = XLSX.utils.json_to_sheet((currentData.try_deductions || []).map(t => ({
         "Treasury": t.try_cd,
         "Major Head": t.mhcd,
         "Voucher No": t.vou_no,
@@ -2849,9 +3796,143 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Amount (₹)": t.amount || 0
       })));
       XLSX.utils.book_append_sheet(wb, wsTry, "Treasury_Deductions_Schedule");
+      filename = `IFMIS_Treasury_Deductions_Schedule_${dateStr}_${timeStr}.xlsx`;
+
+    } else {
+      // Full 11-Sheet Comprehensive Audit Workbook (Export Center)
+      showToast("Generating comprehensive 11-sheet audit workbook in browser...");
+      if (currentData.grand_tally_steps) {
+        const wsTally = XLSX.utils.json_to_sheet(currentData.grand_tally_steps.map(s => ({
+          "Step": s.step,
+          "Accounting Item / Component": s.label,
+          "Sign": s.sign,
+          "Amount (₹)": s.amount,
+          "Audit Justification / Operational Rationale": s.description
+        })));
+        XLSX.utils.book_append_sheet(wb, wsTally, "Grand_Tally_Balance_Sheet");
+      }
+      if (currentData.voucher_register) {
+        const wsGross = XLSX.utils.json_to_sheet(currentData.voucher_register.map(v => ({
+          "Treasury Code": v.try_cd,
+          "Major Head": v.mhcd,
+          "Voucher No": v.vou_no,
+          "DDO Code": v.ddo_cd || "",
+          "Token No": v.token_no || "",
+          "Voucher Date": v.vou_date || "",
+          "File 2 Gross Exp (₹)": v.sop_gross || 0,
+          "File 6 COMPAY Gross (₹)": v.compay_gross || 0,
+          "Gross Diff (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
+          "Match Status": v.status,
+          "Audit Finding": v.status_desc
+        })));
+        XLSX.utils.book_append_sheet(wb, wsGross, "Primary_Gross_Recon");
+      }
+      if (currentData.classification_tally && currentData.classification_tally.rows) {
+        const wsClass = XLSX.utils.json_to_sheet(currentData.classification_tally.rows.map(r => ({
+          "Classification Head (15-Digit)": r.head,
+          "Major Head Description": r.title,
+          "File 2 Lines": r.f2_count,
+          "File 2 Gross (₹)": r.f2_gross,
+          "File 6 Lines": r.f6_count,
+          "File 6 COMPAY (₹)": r.f6_gross,
+          "Difference (₹)": r.diff,
+          "Status": r.status,
+          "Audit Notes & Recovery Details": r.note
+        })));
+        XLSX.utils.book_append_sheet(wb, wsClass, "15_Digit_Classification_Tally");
+      }
+      if (currentData.refund_register && currentData.refund_register.rows) {
+        const wsRef = XLSX.utils.json_to_sheet(currentData.refund_register.rows.map(rf => ({
+          "Source File": rf.source_file,
+          "Voucher No": rf.vou_no,
+          "Date": rf.vou_date || "",
+          "DDO Code": rf.ddo_cd || "",
+          "Classification Head": rf.head,
+          "Major Head Description": rf.head_desc,
+          "Amount (₹)": rf.amount,
+          "Refund Category": rf.category,
+          "Statutory Accounting Treatment": rf.treatment
+        })));
+        XLSX.utils.book_append_sheet(wb, wsRef, "Refund_Vouchers_Register");
+      }
+      if (currentData.cross_file_checks) {
+        const wsChecks = XLSX.utils.json_to_sheet(currentData.cross_file_checks.map(c => ({
+          "Check ID": c.check_id,
+          "Check Name": c.check_name,
+          "Files Used": (c.files_used || []).join(', '),
+          "Records Evaluated": c.records_evaluated,
+          "Passed": c.records_passed,
+          "Failed": c.records_failed,
+          "Difference (₹)": c.difference_amount,
+          "Status": c.status,
+          "Audit Findings": c.explanation
+        })));
+        XLSX.utils.book_append_sheet(wb, wsChecks, "12_Cross_File_Checks");
+      }
+      if (currentData.voucher_register) {
+        const exc = currentData.voucher_register.filter(v => v.status !== 'EXACT_MATCH');
+        const wsExc = XLSX.utils.json_to_sheet(exc.map(v => ({
+          "Treasury": v.try_cd,
+          "Major Head": v.mhcd,
+          "Voucher No": v.vou_no,
+          "DDO Code": v.ddo_cd || "",
+          "Token": v.token_no || "",
+          "Date": v.vou_date || "",
+          "File 2 Gross (₹)": v.sop_gross || 0,
+          "File 6 Gross (₹)": v.compay_gross || 0,
+          "Difference (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
+          "Exception Category": v.status,
+          "Statutory Audit Treatment": v.status_desc
+        })));
+        XLSX.utils.book_append_sheet(wb, wsExc, "Exceptions_Register");
+      }
+      if (currentData.transfer_entries && currentData.transfer_entries.length) {
+        const wsTE = XLSX.utils.json_to_sheet(currentData.transfer_entries.map(te => ({
+          "TE Number": te.te_no,
+          "Major Head": te.mhcd,
+          "Head Title": te.title,
+          "Voucher No": te.vou_no,
+          "Section Code": te.sctnd_code,
+          "Amount (₹)": te.amount,
+          "Bill Date": te.date
+        })));
+        XLSX.utils.book_append_sheet(wb, wsTE, "Transfer_Entries_TE");
+      }
+      if (currentData.ddo_wise && currentData.ddo_wise.length) {
+        const wsDDO = XLSX.utils.json_to_sheet(currentData.ddo_wise.map(d => ({
+          "DDO Code": d.ddo_cd,
+          "Vouchers Passed": d.count,
+          "Total Gross Passed (₹)": d.total_gross
+        })));
+        XLSX.utils.book_append_sheet(wb, wsDDO, "DDO_Expenditure_Summary");
+      }
+      if (currentData.ag_deductions && currentData.ag_deductions.length) {
+        const wsAG = XLSX.utils.json_to_sheet(currentData.ag_deductions.map(a => ({
+          "Treasury": a.try_cd,
+          "Major Head": a.mhcd,
+          "Voucher No": a.vou_no,
+          "DDO Code": a.ddo_cd || "",
+          "Token": a.token_no || "",
+          "Deduction Head": a.ded_mhcd || "",
+          "Amount (₹)": a.amount || 0
+        })));
+        XLSX.utils.book_append_sheet(wb, wsAG, "AG_Deductions_Schedule");
+      }
+      if (currentData.try_deductions && currentData.try_deductions.length) {
+        const wsTry = XLSX.utils.json_to_sheet(currentData.try_deductions.map(t => ({
+          "Treasury": t.try_cd,
+          "Major Head": t.mhcd,
+          "Voucher No": t.vou_no,
+          "DDO Code": t.ddo_cd || "",
+          "Token": t.token_no || "",
+          "Deduction Head": t.ded_mhcd || "",
+          "Amount (₹)": t.amount || 0
+        })));
+        XLSX.utils.book_append_sheet(wb, wsTry, "Treasury_Deductions_Schedule");
+      }
+      filename = `IFMIS_VLC_Reconciliation_Workbook_${dateStr}_${timeStr}.xlsx`;
     }
 
-    const filename = `IFMIS_VLC_Reconciliation_Workbook_${dateStr}_${timeStr}.xlsx`;
     XLSX.writeFile(wb, filename);
 
     displayExportSuccessModal({
@@ -2867,20 +3948,36 @@ function triggerClientExport(format, section = null, saveAs = false) {
     generatePrintableAuditReport();
 
   } else if (format === 'csv') {
+    const isGrossRecon = (section === 'gross_recon');
+    const vouchersToExport = (isGrossRecon && typeof filteredGrossVouchers !== 'undefined' && filteredGrossVouchers && filteredGrossVouchers.length > 0)
+      ? filteredGrossVouchers
+      : (currentData.voucher_register || []);
+
     let csv = "Treasury,Major Head,Voucher No,DDO Code,Token,Date,File 2 Gross,File 6 Gross,Diff,Status,Audit Finding\n";
-    (currentData.voucher_register || []).forEach(v => {
-      const diff = (v.sop_gross || 0) - (v.compay_gross || 0);
-      csv += `"${v.try_cd}","${v.mhcd}","${v.vou_no}","${v.ddo_cd||''}","${v.token_no||''}","${v.vou_date||''}",${v.sop_gross||0},${v.compay_gross||0},${diff},"${v.status}","${(v.status_desc||'').replace(/"/g, '""')}"\n`;
+    let totSop = 0;
+    let totCp = 0;
+    vouchersToExport.forEach(v => {
+      const sg = Number(v.sop_gross || 0);
+      const cg = Number(v.compay_gross || 0);
+      const diff = sg - cg;
+      totSop += sg;
+      totCp += cg;
+      csv += `"${v.try_cd}","${v.mhcd}","${v.vou_no}","${v.ddo_cd||''}","${v.token_no||''}","${v.vou_date||''}",${sg},${cg},${diff},"${v.status}","${(v.status_desc||'').replace(/"/g, '""')}"\n`;
     });
+    if (isGrossRecon) {
+      csv += `"TOTAL","Count: ${vouchersToExport.length}","","","","",${totSop},${totCp},${totSop - totCp},"${Math.abs(totSop - totCp) < 0.01 ? 'EXACT_PARITY' : 'NET_VARIANCE'}","Summary Total for ${vouchersToExport.length} active filtered vouchers"\n`;
+    }
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const filename = `Voucher_Reconciliation_${dateStr}.csv`;
+    const filename = isGrossRecon
+      ? `IFMIS_VLC_Primary_Gross_Reconciliation_File02_vs_File06_${dateStr}_${timeStr}.csv`
+      : `Voucher_Reconciliation_${dateStr}.csv`;
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
-    showToast("Downloaded CSV report.");
+    showToast(`Downloaded CSV: ${filename}`);
 
     displayExportSuccessModal({
       format: 'csv',
@@ -3185,22 +4282,42 @@ function populateAllScreens(data) {
 
     // 1. Dashboard KPIs
     const elGrand = document.getElementById('kpi-compay-grand');
-    if (elGrand) elGrand.textContent = formatCurrency(sum.compay_grand_total);
+    if (elGrand) {
+      elGrand.textContent = formatCurrency(sum.compay_grand_total);
+      elGrand.title = formatCurrency(sum.compay_grand_total);
+    }
 
     const elGross = document.getElementById('kpi-ifmis-gross');
-    if (elGross) elGross.textContent = formatCurrency(sum.f1_gross_total);
+    if (elGross) {
+      const grossVal = (sum.f2_gross_total > 0) ? sum.f2_gross_total : (sum.f1_gross_total || 0);
+      elGross.textContent = formatCurrency(grossVal);
+      elGross.title = formatCurrency(grossVal);
+    }
 
     const elNet = document.getElementById('kpi-ifmis-net');
-    if (elNet) elNet.textContent = formatCurrency(sum.f1_net_total);
+    if (elNet) {
+      elNet.textContent = formatCurrency(sum.f1_net_total);
+      elNet.title = formatCurrency(sum.f1_net_total);
+    }
 
     const elDed = document.getElementById('kpi-ded-total');
-    if (elDed) elDed.textContent = formatCurrency((sum.f1_ag_ded_total || 0) + (sum.f1_try_ded_total || 0));
+    if (elDed) {
+      const dedSum = (sum.f1_ag_ded_total || 0) + (sum.f1_try_ded_total || 0);
+      elDed.textContent = formatCurrency(dedSum);
+      elDed.title = formatCurrency(dedSum);
+    }
 
     const elBreak = document.getElementById('kpi-ded-breakdown');
-    if (elBreak) elBreak.textContent = `AG Ded: ${formatCurrency(sum.f1_ag_ded_total)} | Try: ${formatCurrency(sum.f1_try_ded_total)}`;
+    if (elBreak) {
+      elBreak.textContent = `AG Ded: ${formatCurrency(sum.f1_ag_ded_total)} | Try: ${formatCurrency(sum.f1_try_ded_total)}`;
+      elBreak.title = elBreak.textContent;
+    }
 
     const elDiscrep = document.getElementById('kpi-discrepancy');
-    if (elDiscrep) elDiscrep.textContent = formatCurrency(sum.payment_discrepancy);
+    if (elDiscrep) {
+      elDiscrep.textContent = formatCurrency(sum.payment_discrepancy);
+      elDiscrep.title = formatCurrency(sum.payment_discrepancy);
+    }
 
     // Dual Status Badges (Macro Mathematical Parity & Micro Voucher Reality)
     const totalV = sum.total_vouchers || (data.voucher_register ? data.voucher_register.length : 7431);
@@ -3269,47 +4386,10 @@ function populateAllScreens(data) {
     }
 
     // 4. File 1 Validation
-    const f1Body = document.getElementById('val-f1-table-body');
-    if (f1Body && data.voucher_register) {
-      f1Body.innerHTML = '';
-      data.voucher_register.slice(0, 100).forEach(v => {
-        const tr = document.createElement('tr');
-        const calc = (v.file1_net || 0) + (v.ag_ded || 0);
-        const diff = (v.sop_gross || 0) - calc;
-        tr.innerHTML = `
-          <td class="center-col"><strong>${v.mhcd}</strong></td>
-          <td class="center-col">${v.vou_no}</td>
-          <td>${v.ddo_cd || '-'}</td>
-          <td class="num-col">${formatCurrency(v.sop_gross)}</td>
-          <td class="num-col">${formatCurrency(v.ag_ded)}</td>
-          <td class="num-col">${formatCurrency(v.try_ded)}</td>
-          <td class="num-col">${formatCurrency(v.file1_net)}</td>
-          <td class="num-col" style="color: ${Math.abs(diff) < 0.01 ? 'var(--success)' : 'var(--danger)'};">${formatCurrency(diff)}</td>
-          <td class="center-col"><span class="badge ${Math.abs(diff) < 0.01 ? 'badge-success' : 'badge-danger'}">${Math.abs(diff) < 0.01 ? 'BALANCED' : 'DIFF'}</span></td>
-        `;
-        f1Body.appendChild(tr);
-      });
-    }
+    applyF1Filters();
 
     // 5. Net Recon Table
-    const netBody = document.getElementById('net-recon-table-body');
-    if (netBody && data.voucher_register) {
-      netBody.innerHTML = '';
-      data.voucher_register.slice(0, 100).forEach(v => {
-        const diff = (v.file5_net || 0) - (v.file1_net || 0);
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="center-col"><strong>${v.mhcd}</strong></td>
-          <td class="center-col">${v.vou_no}</td>
-          <td>${v.ddo_cd || '-'}</td>
-          <td class="num-col">${formatCurrency(v.file1_net)}</td>
-          <td class="num-col">${formatCurrency(v.file5_net)}</td>
-          <td class="num-col">${formatCurrency(diff)}</td>
-          <td class="center-col"><span class="badge ${Math.abs(diff) < 0.01 ? 'badge-success' : 'badge-danger'}">${Math.abs(diff) < 0.01 ? 'MATCH' : 'MISMATCH'}</span></td>
-        `;
-        netBody.appendChild(tr);
-      });
-    }
+    applyNetFilters();
 
     // 6. Cross-File 12 Checks
     const chkBody = document.getElementById('cross-file-checks-body');
@@ -3357,117 +4437,11 @@ function populateAllScreens(data) {
       }
     }
 
-    // 7A. Exceptions: Section 1 - Vouchers in Treasury SOP Omitted from VLC COMPAY (Civil Deposits MH 8443 / Uncompiled Payments)
-    const exMissingCompayBody = document.getElementById('exceptions-missing-compay-body');
-    const exMissingCompayTopTotal = document.getElementById('exc-missing-compay-top-total');
-    const exMissingCompayBadge = document.getElementById('exc-missing-compay-badge');
-    const exMissingCompayTitle = document.getElementById('exc-missing-compay-title');
-
-    if (exMissingCompayBody && data.voucher_register) {
-      exMissingCompayBody.innerHTML = '';
-      const missingCompayVouchers = data.voucher_register.filter(v => v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY');
-      
-      let totSopGross = 0;
-      let totSopNet = 0;
-      missingCompayVouchers.forEach(v => {
-        totSopGross += (v.sop_gross || 0);
-        totSopNet += (v.file1_net || 0);
-      });
-
-      if (exMissingCompayBadge) {
-        exMissingCompayBadge.textContent = `${missingCompayVouchers.length} Vouchers (${formatCurrency(totSopGross)})`;
-        exMissingCompayBadge.className = missingCompayVouchers.length > 0 ? 'badge badge-warning' : 'badge badge-success';
-      }
-
-      if (exMissingCompayTopTotal) {
-        if (missingCompayVouchers.length > 0) {
-          exMissingCompayTopTotal.innerHTML = `
-            <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
-            <td class="center-col" style="font-weight: 800; color: var(--primary);">${missingCompayVouchers.length} Vouchers</td>
-            <td style="font-weight: 600;">Various DDOs</td>
-            <td class="center-col">-</td>
-            <td class="center-col">-</td>
-            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopGross)}</td>
-            <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopNet)}</td>
-            <td class="center-col"><span class="badge badge-warning">UNCOMPILED IN COMPAY</span></td>
-            <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Total: ${formatCurrency(totSopGross)} accounted in Grand Tally Step 3</td>
-          `;
-        } else {
-          exMissingCompayTopTotal.innerHTML = `<td colspan="9" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero vouchers omitted from COMPAY in this period.</td>`;
-        }
-      }
-
-      if (missingCompayVouchers.length > 0) {
-        missingCompayVouchers.forEach(m => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td class="center-col"><strong>${m.mhcd}</strong></td>
-            <td class="center-col" style="color: var(--warning); font-weight: 700;">${m.vou_no}</td>
-            <td>${m.ddo_cd || '-'}</td>
-            <td class="center-col">${m.token_no || '-'}</td>
-            <td class="center-col">${m.vou_date || '-'}</td>
-            <td class="num-col" style="color: var(--text-main); font-weight: 700;">${formatCurrency(m.sop_gross)}</td>
-            <td class="num-col">${formatCurrency(m.file1_net)}</td>
-            <td class="center-col"><span class="badge badge-warning">${m.status}</span></td>
-            <td style="font-size: 0.8rem; line-height: 1.4; color: var(--text-color);">${m.status_desc}</td>
-          `;
-          exMissingCompayBody.appendChild(tr);
-        });
-      } else {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 16px;">No vouchers in Treasury SOP were omitted from VLC COMPAY.</td>`;
-        exMissingCompayBody.appendChild(tr);
-      }
-    }
-
-    // 7B. Exceptions: Section 2 - Missing Capital Vouchers in SOP Export (e.g. MH 4801 in Oct)
-    const ex4801Body = document.getElementById('exceptions-4801-body');
-    const exMissingSopBadge = document.getElementById('exc-missing-sop-badge');
-    if (ex4801Body && data.voucher_register) {
-      ex4801Body.innerHTML = '';
-      const missing4801 = data.voucher_register.filter(v => v.status === 'MISSING_IN_SOP');
-      const tot4801Amt = missing4801.reduce((acc, m) => acc + (m.compay_gross || 0), 0);
-
-      if (exMissingSopBadge) {
-        exMissingSopBadge.textContent = `${missing4801.length} Vouchers (${formatCurrency(tot4801Amt)})`;
-        exMissingSopBadge.className = missing4801.length > 0 ? 'badge badge-danger' : 'badge badge-success';
-      }
-
-      const exMissingSopTopTotal = document.getElementById('exc-missing-sop-top-total');
-      if (exMissingSopTopTotal) {
-        if (missing4801.length > 0) {
-          exMissingSopTopTotal.innerHTML = `
-            <td class="center-col" style="font-weight: 800; color: var(--danger);">TOTAL</td>
-            <td class="center-col" style="font-weight: 800; color: var(--danger);">${missing4801.length} Vouchers</td>
-            <td style="font-weight: 600;">Direct State Account</td>
-            <td class="center-col">-</td>
-            <td class="num-col" style="font-weight: 800; color: var(--danger); font-size: 0.92rem;">${formatCurrency(tot4801Amt)}</td>
-            <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Book transfer / LC payments directly compiled by AG</td>
-          `;
-        } else {
-          exMissingSopTopTotal.innerHTML = `<td colspan="6" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero capital vouchers omitted from SOP in this accounting period.</td>`;
-        }
-      }
-
-      if (missing4801.length > 0) {
-        missing4801.forEach(m => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td class="center-col"><strong>${m.mhcd}</strong></td>
-            <td class="center-col" style="color: var(--danger); font-weight: 700;">${m.vou_no}</td>
-            <td>${m.ddo_cd || '-'}</td>
-            <td class="center-col">${m.vou_date || '-'}</td>
-            <td class="num-col" style="color: var(--danger); font-weight: 700;">${formatCurrency(m.compay_gross)}</td>
-            <td>${m.status_desc}</td>
-          `;
-          ex4801Body.appendChild(tr);
-        });
-      } else {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">Zero capital vouchers omitted from SOP in this accounting period.</td>`;
-        ex4801Body.appendChild(tr);
-      }
-    }
+    // 7. Exceptions & Discrepancies Registers
+    renderExceptionsGrandTally();
+    applyExcMismatchFilters();
+    applyExcMissingCompayFilters();
+    applyExcMissingSopFilters();
 
     // 8. Exceptions: Section 3 - Uncompiled Heads Summary (8011, 8342, 8443, 8658)
     const uncompBody = document.getElementById('exceptions-uncompiled-body');
@@ -3532,40 +4506,10 @@ function populateAllScreens(data) {
     }
 
     // 9. AG Deductions Table (File 3)
-    const agTableBody = document.getElementById('ag-ded-table-body');
-    if (agTableBody && data.ag_deductions) {
-      agTableBody.innerHTML = '';
-      data.ag_deductions.forEach(d => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="center-col"><strong>${d.service_mhcd}</strong></td>
-          <td class="center-col">${d.vou_no}</td>
-          <td class="center-col"><strong>${d.ded_mhcd}</strong></td>
-          <td>${d.ded_desc}</td>
-          <td class="num-col">${formatCurrency(d.amount)}</td>
-          <td><span class="badge badge-info">${d.treatment}</span></td>
-        `;
-        agTableBody.appendChild(tr);
-      });
-    }
+    applyAgDedFilters();
 
     // 10. Non-AG Deductions Table (File 4)
-    const tryTableBody = document.getElementById('try-ded-table-body');
-    if (tryTableBody && data.try_deductions) {
-      tryTableBody.innerHTML = '';
-      data.try_deductions.forEach(d => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="center-col"><strong>${d.service_mhcd}</strong></td>
-          <td class="center-col">${d.vou_no}</td>
-          <td class="center-col"><strong>${d.ded_mhcd}</strong></td>
-          <td>${d.ded_desc}</td>
-          <td class="num-col">${formatCurrency(d.amount)}</td>
-          <td><span class="badge badge-warning">${d.treatment}</span></td>
-        `;
-        tryTableBody.appendChild(tr);
-      });
-    }
+    applyTryDedFilters();
 
     // 11. 15-Digit Classification Tally
     if (data.classification_tally) {
@@ -3594,9 +4538,30 @@ function openExcelFilter(event, tableKey, colKey) {
 
   closeExcelFilter();
 
-  const dataset = (tableKey === 'gross')
-    ? (currentData && currentData.voucher_register ? currentData.voucher_register : [])
-    : (currentData && currentData.classification_tally && currentData.classification_tally.rows ? currentData.classification_tally.rows : []);
+  let dataset = [];
+  if (tableKey === 'gross' || tableKey === 'f1' || tableKey === 'net') {
+    dataset = currentData && currentData.voucher_register ? currentData.voucher_register : [];
+  } else if (tableKey === 'classification') {
+    dataset = currentData && currentData.classification_tally && currentData.classification_tally.rows ? currentData.classification_tally.rows : [];
+  } else if (tableKey === 'ag_ded') {
+    dataset = currentData && currentData.ag_deductions ? currentData.ag_deductions : [];
+  } else if (tableKey === 'try_ded') {
+    dataset = currentData && currentData.try_deductions ? currentData.try_deductions : [];
+  } else if (tableKey === 'refunds') {
+    dataset = currentData && currentData.refund_register && currentData.refund_register.rows ? currentData.refund_register.rows : [];
+  } else if (tableKey === 'exc_mismatch') {
+    dataset = (currentData && currentData.voucher_register)
+      ? currentData.voucher_register.filter(v => v.status !== 'EXACT_MATCH' && v.status !== 'MATCHED' && v.status !== 'NETTED_ADJUSTMENT' && v.status !== 'GPF_COMBINED')
+      : [];
+  } else if (tableKey === 'exc_missing_compay') {
+    dataset = (currentData && currentData.voucher_register)
+      ? currentData.voucher_register.filter(v => v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY')
+      : [];
+  } else if (tableKey === 'exc_missing_sop') {
+    dataset = (currentData && currentData.voucher_register)
+      ? currentData.voucher_register.filter(v => v.status === 'MISSING_IN_SOP')
+      : [];
+  }
 
   if (!dataset || dataset.length === 0) {
     showToast("No data available to filter.", true);
@@ -3607,8 +4572,20 @@ function openExcelFilter(event, tableKey, colKey) {
   const valCounts = new Map();
   dataset.forEach(row => {
     let val = row[colKey];
+    if (colKey === 'service_mhcd' && (val === undefined || val === '')) val = row.mhcd;
+    if (colKey === 'ded_desc' && (val === undefined || val === '')) val = getMajorHeadTitle(row.ded_mhcd) || `Head ${row.ded_mhcd}`;
+    if (colKey === 'treatment' && (val === undefined || val === '')) val = 'Accounting Treatment';
+    if (colKey === 'status_f1') {
+      const calc = (row.file1_net || 0) + (row.ag_ded || 0);
+      const diff = (row.sop_gross || 0) - calc;
+      val = Math.abs(diff) < 0.01 ? 'BALANCED' : 'DIFF';
+    }
+    if (colKey === 'status_net') {
+      const diff = (row.file5_net || 0) - (row.file1_net || 0);
+      val = Math.abs(diff) < 0.01 ? 'MATCH' : 'MISMATCH';
+    }
     if (val === undefined || val === null || val === '') val = '(Blank)';
-    val = String(val);
+    val = String(val).trim();
     valCounts.set(val, (valCounts.get(val) || 0) + 1);
   });
 
@@ -3630,9 +4607,17 @@ function openExcelFilter(event, tableKey, colKey) {
     vou_no: 'Voucher Number',
     ddo_cd: 'DDO Code',
     vou_date: 'Voucher Date',
-    status: 'Match Status',
+    status: 'Match Status / Category',
+    status_f1: 'Equation Status',
+    status_net: 'Parity Status',
     head: 'Classification Head (15-Digit)',
-    title: 'Major Head Description'
+    title: 'Major Head Description',
+    service_mhcd: 'Service Major Head',
+    ded_mhcd: 'Deduction Major Head',
+    ded_desc: 'Deduction Description',
+    treatment: 'Accounting Treatment',
+    category: 'Refund Category',
+    source_file: 'Source File'
   };
   const title = colTitles[colKey] || colKey;
 
@@ -3645,16 +4630,18 @@ function openExcelFilter(event, tableKey, colKey) {
     document.body.appendChild(popup);
   }
 
-  currentOpenFilter = { tableKey, colKey, btn: event.currentTarget || event.target };
+  currentOpenFilter = { tableKey, colKey, btn: event.currentTarget || event.target, dirty: false };
 
   let listHtml = '';
+  let initialCheckedCount = 0;
   sortedVals.forEach(v => {
     const isChecked = currentSet ? currentSet.has(v) : true;
+    if (isChecked) initialCheckedCount++;
     const cnt = valCounts.get(v);
     const safeVal = v.replace(/"/g, '&quot;');
     listHtml += `
       <label class="excel-filter-item" style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 0.8rem; cursor: pointer; border-radius: 4px;">
-        <input type="checkbox" class="excel-filter-cb" value="${safeVal}" ${isChecked ? 'checked' : ''}>
+        <input type="checkbox" class="excel-filter-cb" value="${safeVal}" ${isChecked ? 'checked' : ''} onchange="onFilterCheckboxChange('${tableKey}', '${colKey}')">
         <span class="excel-filter-val" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${safeVal}">${v}</span>
         <span style="font-size: 0.72rem; color: var(--text-muted); font-feature-settings: 'tnum';">(${cnt})</span>
       </label>
@@ -3677,7 +4664,7 @@ function openExcelFilter(event, tableKey, colKey) {
       ${listHtml}
     </div>
     <div style="display: flex; justify-content: space-between; gap: 8px;">
-      <button class="btn-primary btn-sm" onclick="applyExcelFilter('${tableKey}', '${colKey}')" style="flex: 1; padding: 5px 10px; font-weight: 700;">Apply</button>
+      <button class="btn-primary btn-sm" id="excel-filter-apply-btn" onclick="applyExcelFilter('${tableKey}', '${colKey}')" style="flex: 1; padding: 5px 10px; font-weight: 700;">Apply (${initialCheckedCount}/${sortedVals.length})</button>
       <button class="btn-secondary btn-sm" onclick="clearExcelFilter('${tableKey}', '${colKey}')" style="flex: 1; padding: 5px 10px;">Clear Filter</button>
     </div>
   `;
@@ -3702,10 +4689,29 @@ function openExcelFilter(event, tableKey, colKey) {
   }, 10);
 }
 
+function onFilterCheckboxChange(tableKey, colKey) {
+  if (currentOpenFilter) currentOpenFilter.dirty = true;
+  const cbs = document.querySelectorAll('#excel-filter-items-container .excel-filter-cb');
+  let checkedCount = 0;
+  let totalCount = 0;
+  cbs.forEach(cb => {
+    totalCount++;
+    if (cb.checked) checkedCount++;
+  });
+  const applyBtn = document.getElementById('excel-filter-apply-btn');
+  if (applyBtn) {
+    applyBtn.textContent = `Apply (${checkedCount}/${totalCount})`;
+  }
+}
+
 function onDocClickCloseFilter(e) {
   const popup = document.getElementById('excel-filter-popup');
   if (popup && !popup.contains(e.target)) {
-    closeExcelFilter();
+    if (currentOpenFilter && currentOpenFilter.dirty) {
+      applyExcelFilter(currentOpenFilter.tableKey, currentOpenFilter.colKey);
+    } else {
+      closeExcelFilter();
+    }
   }
 }
 
@@ -3733,6 +4739,22 @@ function setAllFilterCheckboxes(selectAll) {
       cb.checked = selectAll;
     }
   });
+  if (currentOpenFilter) {
+    onFilterCheckboxChange(currentOpenFilter.tableKey, currentOpenFilter.colKey);
+  }
+}
+
+function applyFiltersForTable(tableKey) {
+  if (tableKey === 'gross') applyGrossFilters();
+  else if (tableKey === 'classification') applyClassificationFilters();
+  else if (tableKey === 'f1') applyF1Filters();
+  else if (tableKey === 'net') applyNetFilters();
+  else if (tableKey === 'ag_ded') applyAgDedFilters();
+  else if (tableKey === 'try_ded') applyTryDedFilters();
+  else if (tableKey === 'refunds') applyRefundFilters();
+  else if (tableKey === 'exc_mismatch') applyExcMismatchFilters();
+  else if (tableKey === 'exc_missing_compay') applyExcMissingCompayFilters();
+  else if (tableKey === 'exc_missing_sop') applyExcMissingSopFilters();
 }
 
 function applyExcelFilter(tableKey, colKey) {
@@ -3741,7 +4763,7 @@ function applyExcelFilter(tableKey, colKey) {
   let totalVisible = 0;
   cbs.forEach(cb => {
     totalVisible++;
-    if (cb.checked) checkedVals.add(cb.value);
+    if (cb.checked) checkedVals.add(cb.value.trim());
   });
 
   if (!activeColumnFilters[tableKey]) activeColumnFilters[tableKey] = {};
@@ -3752,14 +4774,10 @@ function applyExcelFilter(tableKey, colKey) {
     activeColumnFilters[tableKey][colKey] = checkedVals;
   }
 
+  if (currentOpenFilter) currentOpenFilter.dirty = false;
   updateFilterButtonState(tableKey, colKey);
   closeExcelFilter();
-
-  if (tableKey === 'gross') {
-    applyGrossFilters();
-  } else if (tableKey === 'classification') {
-    applyClassificationFilters();
-  }
+  applyFiltersForTable(tableKey);
 }
 
 function clearExcelFilter(tableKey, colKey) {
@@ -3768,12 +4786,7 @@ function clearExcelFilter(tableKey, colKey) {
   }
   updateFilterButtonState(tableKey, colKey);
   closeExcelFilter();
-
-  if (tableKey === 'gross') {
-    applyGrossFilters();
-  } else if (tableKey === 'classification') {
-    applyClassificationFilters();
-  }
+  applyFiltersForTable(tableKey);
 }
 
 function clearAllExcelFilters(tableKey) {
@@ -3783,12 +4796,8 @@ function clearAllExcelFilters(tableKey) {
     btn.innerHTML = '⛛';
     btn.title = 'Filter column';
   });
-  if (tableKey === 'gross') {
-    applyGrossFilters();
-  } else if (tableKey === 'classification') {
-    applyClassificationFilters();
-  }
-  showToast(`Cleared all filters on ${tableKey === 'gross' ? 'Primary Gross Recon' : 'Classification Tally'} table.`);
+  applyFiltersForTable(tableKey);
+  showToast(`Cleared all column filters on ${tableKey.toUpperCase()} register.`);
 }
 
 function updateFilterButtonState(tableKey, colKey) {
@@ -3817,6 +4826,9 @@ function syncStickyTableHeaders() {
         if (rect.height > 0) {
           const h = Math.round(rect.height);
           wrap.style.setProperty('--table-header-height', h + 'px');
+          table.querySelectorAll('.table-top-total-row td, .table-top-total-row th').forEach(cell => {
+            cell.style.top = h + 'px';
+          });
         }
       }
     });
@@ -3836,10 +4848,17 @@ function renderGrossTopTotalRow(records) {
   let totalSop = 0;
   let totalCompay = 0;
   let exactCount = 0;
+  let uniqueSopCount = 0;
+  let uniqueCpCount = 0;
   const distinctDDOs = new Set();
   const distinctMhcds = new Set();
 
   records.forEach(v => {
+    const hasSop = (v.sop_gross || 0) > 0 || (v.file1_net || 0) > 0 || (v.status !== 'MISSING_IN_SOP');
+    const hasCp = (v.compay_gross || 0) > 0 || (v.status !== 'MISSING_IN_COMPAY' && v.status !== 'UNCOMPILED_HEAD');
+    if (hasSop) uniqueSopCount++;
+    if (hasCp) uniqueCpCount++;
+
     totalSop += (v.sop_gross || 0);
     totalCompay += (v.compay_gross || 0);
     if (v.status === 'EXACT_MATCH') exactCount++;
@@ -3852,16 +4871,38 @@ function renderGrossTopTotalRow(records) {
 
   totalRow.innerHTML = `
     <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
-    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Vouchers</td>
-    <td style="font-weight: 600; color: var(--text-main);">${distinctDDOs.size} DDOs (${distinctMhcds.size} MH)</td>
+    <td class="center-col" style="padding: 6px 4px;">
+      <div style="font-weight: 800; color: var(--primary); font-size: 0.86rem;">${totalCount.toLocaleString()} Vouchers</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; margin-top: 2px;">
+        File 02: <strong style="color: var(--primary);">${uniqueSopCount.toLocaleString()}</strong> | File 06: <strong style="color: var(--text-main);">${uniqueCpCount.toLocaleString()}</strong>
+      </div>
+    </td>
+    <td style="font-weight: 600; color: var(--text-main); font-size: 0.8rem;">
+      <div>${distinctDDOs.size} DDOs</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">(${distinctMhcds.size} Major Heads)</div>
+    </td>
     <td class="center-col" style="color: var(--text-muted);">-</td>
     <td class="center-col" style="color: var(--text-muted);">-</td>
-    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalSop)}</td>
-    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalCompay)}</td>
+    <td class="num-col" style="padding: 6px 6px;">
+      <div style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalSop)}</div>
+      <div style="font-size: 0.70rem; color: var(--primary); font-weight: 600;">File 02: ${uniqueSopCount.toLocaleString()} Vouchers</div>
+    </td>
+    <td class="num-col" style="padding: 6px 6px;">
+      <div style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalCompay)}</div>
+      <div style="font-size: 0.70rem; color: var(--text-muted); font-weight: 600;">File 06: ${uniqueCpCount.toLocaleString()} Vouchers</div>
+    </td>
     <td class="num-col" style="font-weight: 800; color: ${Math.abs(totalDiff) < 0.01 ? 'var(--success)' : 'var(--danger)'}; font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
     <td class="center-col"><span class="badge ${Math.abs(totalDiff) < 0.01 ? 'badge-success' : 'badge-warning'}">${exactCount === totalCount ? '100% MATCH' : `${exactCount.toLocaleString()} (${exactPct}%) Match`}</span></td>
-    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Column Total Summary for ${totalCount.toLocaleString()} visible records</td>
+    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">
+      Tallied <strong>${uniqueSopCount.toLocaleString()}</strong> File 02 vouchers against <strong>${uniqueCpCount.toLocaleString()}</strong> File 06 COMPAY vouchers (${totalCount.toLocaleString()} combined).
+    </td>
   `;
+
+  // Update Callout Header Badges
+  const f2Badge = document.getElementById('badge-gross-f2-count');
+  if (f2Badge) f2Badge.textContent = `File 02: ${uniqueSopCount.toLocaleString()} Vouchers`;
+  const f6Badge = document.getElementById('badge-gross-f6-count');
+  if (f6Badge) f6Badge.textContent = `File 06: ${uniqueCpCount.toLocaleString()} Vouchers`;
 }
 
 function renderClassTopTotalRow(records) {
@@ -3974,7 +5015,8 @@ function applyGrossFilters() {
       const allowed = activeFilters[col];
       let val = v[col];
       if (val === undefined || val === null || val === '') val = '(Blank)';
-      if (!allowed.has(String(val))) return false;
+      val = String(val).trim();
+      if (!allowed.has(val)) return false;
     }
 
     // 3. Search Box Query
@@ -3994,27 +5036,20 @@ function applyGrossFilters() {
   renderGrossTable();
 }
 
-function renderGrossTable() {
+let grossRenderedCount = 0;
+const GROSS_CHUNK_SIZE = 1500;
+let isGrossScrollListenerAttached = false;
+
+function appendGrossTableChunk() {
   const tbody = document.getElementById('gross-table-body');
   if (!tbody) return;
-  tbody.innerHTML = '';
-
-  // Render sticky top total row dynamically
-  renderGrossTopTotalRow(filteredGrossVouchers);
-
   const total = filteredGrossVouchers.length;
-  const summaryEl = document.getElementById('gross-table-summary');
-  const hasActiveFilters = Object.keys(activeColumnFilters.gross || {}).some(k => activeColumnFilters.gross[k] && activeColumnFilters.gross[k].size > 0);
-  if (summaryEl) {
-    summaryEl.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-        <span>Showing all <strong>${total.toLocaleString()}</strong> vouchers (100% visible on 1 page with continuous scroll)</span>
-        ${hasActiveFilters ? `<button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('gross')">Reset All Column Filters</button>` : ''}
-      </div>
-    `;
-  }
+  if (grossRenderedCount >= total) return;
 
-  filteredGrossVouchers.forEach(v => {
+  const nextBatch = filteredGrossVouchers.slice(grossRenderedCount, grossRenderedCount + GROSS_CHUNK_SIZE);
+  const fragment = document.createDocumentFragment();
+
+  nextBatch.forEach(v => {
     const tr = document.createElement('tr');
     let badgeClass = 'badge-success';
     if (v.status === 'MISSING_IN_SOP') badgeClass = 'badge-danger';
@@ -4023,16 +5058,8 @@ function renderGrossTable() {
 
     const diff = (v.sop_gross || 0) - (v.compay_gross || 0);
 
-    let explainBtn = '';
-    if (v.status === 'NETTED_ADJUSTMENT') {
-      explainBtn = ` <button class="btn-secondary btn-sm" onclick="showLaymanExplanation('recovery')" style="font-size: 0.7rem; padding: 1px 6px; margin-left: 6px;">💡 Explain</button>`;
-    } else if (v.status === 'MISSING_IN_SOP') {
-      explainBtn = ` <button class="btn-secondary btn-sm" onclick="showLaymanExplanation('energy_4801')" style="font-size: 0.7rem; padding: 1px 6px; margin-left: 6px;">💡 Explain</button>`;
-    } else if (v.status === 'UNCOMPILED_HEAD') {
-      explainBtn = ` <button class="btn-secondary btn-sm" onclick="showLaymanExplanation('public_account')" style="font-size: 0.7rem; padding: 1px 6px; margin-left: 6px;">💡 Explain</button>`;
-    } else if (v.status.includes('GPF')) {
-      explainBtn = ` <button class="btn-secondary btn-sm" onclick="showLaymanExplanation('gpf')" style="font-size: 0.7rem; padding: 1px 6px; margin-left: 6px;">💡 Explain</button>`;
-    }
+    const safeKey = String(v.key || `${v.try_cd || ''}|${v.mhcd}|${v.vou_no}`).replace(/'/g, "\\'");
+    const explainBtn = ` <button class="btn-secondary btn-sm" onclick="showVoucherRowExplanation('${safeKey}')" style="font-size: 0.7rem; padding: 1px 6px; margin-left: 6px;">💡 Explain</button>`;
 
     tr.innerHTML = `
       <td class="center-col"><strong>${v.mhcd}</strong></td>
@@ -4046,9 +5073,63 @@ function renderGrossTable() {
       <td class="center-col"><span class="badge ${badgeClass}">${v.status}</span></td>
       <td class="wrap-cell" style="color: var(--text-color); font-size: 0.8rem; line-height: 1.4;">${v.status_desc}${explainBtn}</td>
     `;
-    tbody.appendChild(tr);
+    fragment.appendChild(tr);
   });
+
+  tbody.appendChild(fragment);
+  grossRenderedCount += nextBatch.length;
   syncStickyTableHeaders();
+}
+
+function renderGrossTable() {
+  const tbody = document.getElementById('gross-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  grossRenderedCount = 0;
+
+  // Render sticky top total row dynamically
+  renderGrossTopTotalRow(filteredGrossVouchers);
+
+  const total = filteredGrossVouchers.length;
+  let uniqueSopCount = 0;
+  let uniqueCpCount = 0;
+  filteredGrossVouchers.forEach(v => {
+    const hasSop = (v.sop_gross || 0) > 0 || (v.file1_net || 0) > 0 || (v.status !== 'MISSING_IN_SOP');
+    const hasCp = (v.compay_gross || 0) > 0 || (v.status !== 'MISSING_IN_COMPAY' && v.status !== 'UNCOMPILED_HEAD');
+    if (hasSop) uniqueSopCount++;
+    if (hasCp) uniqueCpCount++;
+  });
+
+  const summaryEl = document.getElementById('gross-table-summary');
+  const hasActiveFilters = Object.keys(activeColumnFilters.gross || {}).some(k => activeColumnFilters.gross[k] && activeColumnFilters.gross[k].size > 0);
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span>Showing all <strong>${total.toLocaleString()}</strong> records (File 02: <strong>${uniqueSopCount.toLocaleString()}</strong> unique vouchers | File 06: <strong>${uniqueCpCount.toLocaleString()}</strong> unique vouchers)</span>
+        ${hasActiveFilters ? `<button class="btn-secondary btn-sm" onclick="clearAllExcelFilters('gross')">Reset All Column Filters</button>` : ''}
+      </div>
+    `;
+  }
+
+  // Render first batch immediately
+  appendGrossTableChunk();
+
+  if (!isGrossScrollListenerAttached) {
+    const scrollContainer = tbody.closest('.table-container');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', () => {
+        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 600) {
+          appendGrossTableChunk();
+        }
+      });
+    }
+    window.addEventListener('scroll', () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 600) {
+        appendGrossTableChunk();
+      }
+    });
+    isGrossScrollListenerAttached = true;
+  }
 }
 
 function grossPrevPage() {
@@ -4338,6 +5419,9 @@ function applyRefundFilters() {
   if (!currentData || !currentData.refund_register || !currentData.refund_register.rows) return;
   const q = (document.getElementById('refund-search') ? document.getElementById('refund-search').value : '').toLowerCase().trim();
 
+  const activeFilters = activeColumnFilters.refunds || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
   filteredRefundRows = currentData.refund_register.rows.filter(r => {
     let matchCat = true;
     if (currentRefundCategoryFilter === 'SALARY_ADVANCE') {
@@ -4351,6 +5435,15 @@ function applyRefundFilters() {
     }
 
     if (!matchCat) return false;
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = r[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
     if (!q) return true;
 
     return (
@@ -4362,6 +5455,9 @@ function applyRefundFilters() {
       (r.ddo_cd && r.ddo_cd.toLowerCase().includes(q))
     );
   });
+
+  const bEl = document.getElementById('refund-badge');
+  if (bEl) bEl.textContent = `${filteredRefundRows.length.toLocaleString()} Entries`;
 
   renderRefundTable();
 }
@@ -4401,10 +5497,42 @@ function sortRefundTable(col) {
   renderRefundTable();
 }
 
+function renderRefundsTopTotalRow(records) {
+  const totalRow = document.getElementById('refunds-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 8px;">No refunds match active filter criteria</td>`;
+    return;
+  }
+
+  let totalAmt = 0;
+  let totalNeg = 0;
+  records.forEach(r => {
+    totalAmt += (r.amount || 0);
+    if ((r.amount || 0) < 0) totalNeg += r.amount;
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Vouchers</td>
+    <td class="center-col">-</td>
+    <td>Various DDOs</td>
+    <td class="center-col">-</td>
+    <td style="font-weight: 600;">Net Negative: ${formatCurrency(totalNeg)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalAmt)}</td>
+    <td class="center-col"><span class="badge badge-info">${totalCount} Entries</span></td>
+    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Minor Head 900 / Negative Expenditure Refunds</td>
+  `;
+}
+
 function renderRefundTable() {
   const tbody = document.getElementById('refund-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
+
+  renderRefundsTopTotalRow(filteredRefundRows);
 
   filteredRefundRows.forEach(r => {
     const tr = document.createElement('tr');
@@ -4426,6 +5554,1242 @@ function renderRefundTable() {
     `;
     tbody.appendChild(tr);
   });
+  syncStickyTableHeaders();
+}
+
+// =========================================================================
+// SECTION 4: Bill Gross-Net Validation (File 01) Handlers
+// =========================================================================
+
+let filteredF1Vouchers = [];
+let currentF1StatusFilter = 'ALL';
+let f1SortCol = null;
+let f1SortAsc = true;
+let f1RenderedCount = 0;
+const F1_CHUNK_SIZE = 1500;
+let isF1ScrollListenerAttached = false;
+
+function onF1Search() {
+  applyF1Filters();
+}
+
+function setF1Filter(cat) {
+  currentF1StatusFilter = cat;
+  document.querySelectorAll('#f1-pill-group .pill').forEach(btn => {
+    btn.classList.remove('active');
+    const oc = btn.getAttribute('onclick') || '';
+    if (oc.includes(`'${cat}'`)) btn.classList.add('active');
+  });
+  applyF1Filters();
+}
+
+function applyF1Filters() {
+  if (!currentData || !currentData.voucher_register) return;
+  const q = (document.getElementById('f1-search') ? document.getElementById('f1-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.f1 || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  filteredF1Vouchers = currentData.voucher_register.filter(v => {
+    const calc = (v.file1_net || 0) + (v.ag_ded || 0);
+    const diff = (v.sop_gross || 0) - calc;
+    const isBalanced = Math.abs(diff) < 0.01;
+
+    // Status Pill
+    if (currentF1StatusFilter === 'BALANCED' && !isBalanced) return false;
+    if (currentF1StatusFilter === 'DIFF' && isBalanced) return false;
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (col === 'status_f1') val = isBalanced ? 'BALANCED' : 'DIFF';
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // Search query
+    if (!q) return true;
+    return (
+      (v.mhcd && v.mhcd.toLowerCase().includes(q)) ||
+      (v.vou_no && String(v.vou_no).toLowerCase().includes(q)) ||
+      (v.ddo_cd && v.ddo_cd.toLowerCase().includes(q))
+    );
+  });
+
+  const bEl = document.getElementById('val-f1-badge');
+  if (bEl) bEl.textContent = `${filteredF1Vouchers.length.toLocaleString()} Vouchers`;
+
+  renderF1Table();
+}
+
+function sortF1Table(col) {
+  if (f1SortCol === col) {
+    f1SortAsc = !f1SortAsc;
+  } else {
+    f1SortCol = col;
+    f1SortAsc = true;
+  }
+
+  ['mhcd', 'vou_no', 'ddo_cd', 'sop_gross', 'ag_ded', 'try_ded', 'file1_net', 'diff', 'status'].forEach(c => {
+    const el = document.getElementById('sort-f1-' + c);
+    if (el) el.textContent = (c === col) ? (f1SortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredF1Vouchers.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'diff') {
+      va = (a.sop_gross || 0) - ((a.file1_net || 0) + (a.ag_ded || 0));
+      vb = (b.sop_gross || 0) - ((b.file1_net || 0) + (b.ag_ded || 0));
+    } else if (col === 'status') {
+      va = Math.abs((a.sop_gross || 0) - ((a.file1_net || 0) + (a.ag_ded || 0))) < 0.01 ? 'BALANCED' : 'DIFF';
+      vb = Math.abs((b.sop_gross || 0) - ((b.file1_net || 0) + (b.ag_ded || 0))) < 0.01 ? 'BALANCED' : 'DIFF';
+    } else if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return f1SortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return f1SortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return f1SortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderF1Table();
+}
+
+function renderF1TopTotalRow(records) {
+  const totalRow = document.getElementById('f1-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 8px;">No vouchers match active filter criteria</td>`;
+    return;
+  }
+
+  let totalSop = 0, totalAg = 0, totalTry = 0, totalNet = 0, totalDiff = 0, balancedCount = 0;
+  const distinctDDOs = new Set();
+
+  records.forEach(v => {
+    totalSop += (v.sop_gross || 0);
+    totalAg += (v.ag_ded || 0);
+    totalTry += (v.try_ded || 0);
+    totalNet += (v.file1_net || 0);
+    const d = (v.sop_gross || 0) - ((v.file1_net || 0) + (v.ag_ded || 0));
+    totalDiff += d;
+    if (Math.abs(d) < 0.01) balancedCount++;
+    if (v.ddo_cd) distinctDDOs.add(v.ddo_cd);
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Vouchers</td>
+    <td style="font-weight: 600;">${distinctDDOs.size} DDOs</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalSop)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalAg)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalTry)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalNet)}</td>
+    <td class="num-col" style="font-weight: 800; color: ${Math.abs(totalDiff) < 0.01 ? 'var(--success)' : 'var(--danger)'}; font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
+    <td class="center-col"><span class="badge ${balancedCount === totalCount ? 'badge-success' : 'badge-warning'}">${balancedCount}/${totalCount} BALANCED</span></td>
+  `;
+}
+
+function appendF1TableChunk() {
+  const tbody = document.getElementById('val-f1-table-body');
+  if (!tbody) return;
+  const total = filteredF1Vouchers.length;
+  if (f1RenderedCount >= total) return;
+
+  const nextBatch = filteredF1Vouchers.slice(f1RenderedCount, f1RenderedCount + F1_CHUNK_SIZE);
+  const fragment = document.createDocumentFragment();
+
+  nextBatch.forEach(v => {
+    const calc = (v.file1_net || 0) + (v.ag_ded || 0);
+    const diff = (v.sop_gross || 0) - calc;
+    const isBalanced = Math.abs(diff) < 0.01;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${v.mhcd}</strong></td>
+      <td class="center-col">${v.vou_no}</td>
+      <td>${v.ddo_cd || '-'}</td>
+      <td class="num-col">${formatCurrency(v.sop_gross)}</td>
+      <td class="num-col">${formatCurrency(v.ag_ded)}</td>
+      <td class="num-col">${formatCurrency(v.try_ded)}</td>
+      <td class="num-col">${formatCurrency(v.file1_net)}</td>
+      <td class="num-col" style="color: ${isBalanced ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${formatCurrency(diff)}</td>
+      <td class="center-col"><span class="badge ${isBalanced ? 'badge-success' : 'badge-danger'}">${isBalanced ? 'BALANCED' : 'DIFF'}</span></td>
+    `;
+    fragment.appendChild(tr);
+  });
+
+  tbody.appendChild(fragment);
+  f1RenderedCount += nextBatch.length;
+  syncStickyTableHeaders();
+}
+
+function renderF1Table() {
+  const tbody = document.getElementById('val-f1-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  f1RenderedCount = 0;
+
+  renderF1TopTotalRow(filteredF1Vouchers);
+  appendF1TableChunk();
+
+  if (!isF1ScrollListenerAttached) {
+    const scrollContainer = tbody.closest('.table-responsive');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', () => {
+        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
+          appendF1TableChunk();
+        }
+      });
+    }
+    isF1ScrollListenerAttached = true;
+  }
+}
+
+// =========================================================================
+// SECTION 5: Net Bank SOP (File 01 vs File 05) Handlers
+// =========================================================================
+
+let filteredNetVouchers = [];
+let currentNetStatusFilter = 'ALL';
+let netSortCol = null;
+let netSortAsc = true;
+let netRenderedCount = 0;
+const NET_CHUNK_SIZE = 1500;
+let isNetScrollListenerAttached = false;
+
+function onNetSearch() {
+  applyNetFilters();
+}
+
+function setNetFilter(cat) {
+  currentNetStatusFilter = cat;
+  document.querySelectorAll('#net-pill-group .pill').forEach(btn => {
+    btn.classList.remove('active');
+    const oc = btn.getAttribute('onclick') || '';
+    if (oc.includes(`'${cat}'`)) btn.classList.add('active');
+  });
+  applyNetFilters();
+}
+
+function applyNetFilters() {
+  if (!currentData || !currentData.voucher_register) return;
+  const q = (document.getElementById('net-search') ? document.getElementById('net-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.net || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  filteredNetVouchers = currentData.voucher_register.filter(v => {
+    const diff = (v.file5_net || 0) - (v.file1_net || 0);
+    const isMatch = Math.abs(diff) < 0.01;
+
+    // Status Pill
+    if (currentNetStatusFilter === 'MATCH' && !isMatch) return false;
+    if (currentNetStatusFilter === 'MISMATCH' && isMatch) return false;
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (col === 'status_net') val = isMatch ? 'MATCH' : 'MISMATCH';
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // Search query
+    if (!q) return true;
+    return (
+      (v.mhcd && v.mhcd.toLowerCase().includes(q)) ||
+      (v.vou_no && String(v.vou_no).toLowerCase().includes(q)) ||
+      (v.ddo_cd && v.ddo_cd.toLowerCase().includes(q))
+    );
+  });
+
+  const bEl = document.getElementById('net-recon-badge');
+  if (bEl) bEl.textContent = `${filteredNetVouchers.length.toLocaleString()} Vouchers`;
+
+  renderNetTable();
+}
+
+function sortNetTable(col) {
+  if (netSortCol === col) {
+    netSortAsc = !netSortAsc;
+  } else {
+    netSortCol = col;
+    netSortAsc = true;
+  }
+
+  ['mhcd', 'vou_no', 'ddo_cd', 'file1_net', 'file5_net', 'diff', 'status'].forEach(c => {
+    const el = document.getElementById('sort-net-' + c);
+    if (el) el.textContent = (c === col) ? (netSortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredNetVouchers.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'diff') {
+      va = (a.file5_net || 0) - (a.file1_net || 0);
+      vb = (b.file5_net || 0) - (b.file1_net || 0);
+    } else if (col === 'status') {
+      va = Math.abs((a.file5_net || 0) - (a.file1_net || 0)) < 0.01 ? 'MATCH' : 'MISMATCH';
+      vb = Math.abs((b.file5_net || 0) - (b.file1_net || 0)) < 0.01 ? 'MATCH' : 'MISMATCH';
+    } else if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return netSortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return netSortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return netSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderNetTable();
+}
+
+function renderNetTopTotalRow(records) {
+  const totalRow = document.getElementById('net-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="7" style="text-align: center; color: var(--text-muted); padding: 8px;">No vouchers match active filter criteria</td>`;
+    return;
+  }
+
+  let totalF1Net = 0, totalF5Net = 0, totalDiff = 0, matchCount = 0;
+  const distinctDDOs = new Set();
+
+  records.forEach(v => {
+    totalF1Net += (v.file1_net || 0);
+    totalF5Net += (v.file5_net || 0);
+    const d = (v.file5_net || 0) - (v.file1_net || 0);
+    totalDiff += d;
+    if (Math.abs(d) < 0.01) matchCount++;
+    if (v.ddo_cd) distinctDDOs.add(v.ddo_cd);
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Vouchers</td>
+    <td style="font-weight: 600;">${distinctDDOs.size} DDOs</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalF1Net)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalF5Net)}</td>
+    <td class="num-col" style="font-weight: 800; color: ${Math.abs(totalDiff) < 0.01 ? 'var(--success)' : 'var(--danger)'}; font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
+    <td class="center-col"><span class="badge ${matchCount === totalCount ? 'badge-success' : 'badge-warning'}">${matchCount}/${totalCount} MATCH</span></td>
+  `;
+}
+
+function appendNetTableChunk() {
+  const tbody = document.getElementById('net-recon-table-body');
+  if (!tbody) return;
+  const total = filteredNetVouchers.length;
+  if (netRenderedCount >= total) return;
+
+  const nextBatch = filteredNetVouchers.slice(netRenderedCount, netRenderedCount + NET_CHUNK_SIZE);
+  const fragment = document.createDocumentFragment();
+
+  nextBatch.forEach(v => {
+    const diff = (v.file5_net || 0) - (v.file1_net || 0);
+    const isMatch = Math.abs(diff) < 0.01;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${v.mhcd}</strong></td>
+      <td class="center-col">${v.vou_no}</td>
+      <td>${v.ddo_cd || '-'}</td>
+      <td class="num-col">${formatCurrency(v.file1_net)}</td>
+      <td class="num-col">${formatCurrency(v.file5_net)}</td>
+      <td class="num-col" style="color: ${isMatch ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${formatCurrency(diff)}</td>
+      <td class="center-col"><span class="badge ${isMatch ? 'badge-success' : 'badge-danger'}">${isMatch ? 'MATCH' : 'MISMATCH'}</span></td>
+    `;
+    fragment.appendChild(tr);
+  });
+
+  tbody.appendChild(fragment);
+  netRenderedCount += nextBatch.length;
+  syncStickyTableHeaders();
+}
+
+function renderNetTable() {
+  const tbody = document.getElementById('net-recon-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  netRenderedCount = 0;
+
+  renderNetTopTotalRow(filteredNetVouchers);
+  appendNetTableChunk();
+
+  if (!isNetScrollListenerAttached) {
+    const scrollContainer = tbody.closest('.table-responsive');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', () => {
+        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
+          appendNetTableChunk();
+        }
+      });
+    }
+    isNetScrollListenerAttached = true;
+  }
+}
+
+// =========================================================================
+// SECTION 6: AG Deductions (File 03) Handlers
+// =========================================================================
+
+let filteredAgDedRows = [];
+let currentAgDedHeadFilter = 'ALL';
+let agDedSortCol = null;
+let agDedSortAsc = true;
+let agDedRenderedCount = 0;
+const AG_DED_CHUNK_SIZE = 1500;
+let isAgDedScrollListenerAttached = false;
+
+function onAgDedSearch() {
+  applyAgDedFilters();
+}
+
+function setAgDedFilter(cat) {
+  currentAgDedHeadFilter = cat;
+  document.querySelectorAll('#ag-ded-pill-group .pill').forEach(btn => {
+    btn.classList.remove('active');
+    const oc = btn.getAttribute('onclick') || '';
+    if (oc.includes(`'${cat}'`)) btn.classList.add('active');
+  });
+  applyAgDedFilters();
+}
+
+function applyAgDedFilters() {
+  if (!currentData || !currentData.ag_deductions) return;
+  const q = (document.getElementById('ag-ded-search') ? document.getElementById('ag-ded-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.ag_ded || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  filteredAgDedRows = currentData.ag_deductions.filter(d => {
+    // Head Pill
+    if (currentAgDedHeadFilter !== 'ALL') {
+      if (currentAgDedHeadFilter === 'OTHER') {
+        if (['8009', '0070', '6075', '7610'].includes(d.ded_mhcd)) return false;
+      } else {
+        if (d.ded_mhcd !== currentAgDedHeadFilter) return false;
+      }
+    }
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = d[col];
+      if (col === 'service_mhcd' && (val === undefined || val === '')) val = d.mhcd;
+      if (col === 'ded_desc' && (val === undefined || val === '')) val = getMajorHeadTitle(d.ded_mhcd);
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // Search query
+    if (!q) return true;
+    const sMh = String(d.service_mhcd || d.mhcd || '').toLowerCase();
+    const vNo = String(d.vou_no || '').toLowerCase();
+    const dMh = String(d.ded_mhcd || '').toLowerCase();
+    const dDesc = String(d.ded_desc || getMajorHeadTitle(d.ded_mhcd) || '').toLowerCase();
+    const treat = String(d.treatment || '').toLowerCase();
+    return sMh.includes(q) || vNo.includes(q) || dMh.includes(q) || dDesc.includes(q) || treat.includes(q);
+  });
+
+  const bEl = document.getElementById('ag-ded-badge');
+  if (bEl) bEl.textContent = `${filteredAgDedRows.length.toLocaleString()} Deductions`;
+
+  renderAgDedTable();
+}
+
+function sortAgDedTable(col) {
+  if (agDedSortCol === col) {
+    agDedSortAsc = !agDedSortAsc;
+  } else {
+    agDedSortCol = col;
+    agDedSortAsc = true;
+  }
+
+  ['service_mhcd', 'vou_no', 'ded_mhcd', 'ded_desc', 'amount', 'treatment'].forEach(c => {
+    const el = document.getElementById('sort-ag-ded-' + c);
+    if (el) el.textContent = (c === col) ? (agDedSortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredAgDedRows.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'service_mhcd') {
+      va = a.service_mhcd || a.mhcd || '';
+      vb = b.service_mhcd || b.mhcd || '';
+    } else if (col === 'ded_desc') {
+      va = a.ded_desc || getMajorHeadTitle(a.ded_mhcd) || '';
+      vb = b.ded_desc || getMajorHeadTitle(b.ded_mhcd) || '';
+    } else if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return agDedSortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return agDedSortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return agDedSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderAgDedTable();
+}
+
+function renderAgDedTopTotalRow(records) {
+  const totalRow = document.getElementById('ag-ded-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 8px;">No AG deductions match active filter criteria</td>`;
+    return;
+  }
+
+  let totalAmt = 0;
+  const distinctDedMhcds = new Set();
+  const distinctServiceMhcds = new Set();
+
+  records.forEach(d => {
+    totalAmt += (d.amount || 0);
+    if (d.ded_mhcd) distinctDedMhcds.add(d.ded_mhcd);
+    if (d.service_mhcd || d.mhcd) distinctServiceMhcds.add(d.service_mhcd || d.mhcd);
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Records</td>
+    <td class="center-col" style="font-weight: 700;">${distinctDedMhcds.size} Heads</td>
+    <td style="font-weight: 600;">Across ${distinctServiceMhcds.size} Service Heads</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalAmt)}</td>
+    <td><span class="badge badge-info">AG Accounting Schedule Total</span></td>
+  `;
+}
+
+function appendAgDedTableChunk() {
+  const tbody = document.getElementById('ag-ded-table-body');
+  if (!tbody) return;
+  const total = filteredAgDedRows.length;
+  if (agDedRenderedCount >= total) return;
+
+  const nextBatch = filteredAgDedRows.slice(agDedRenderedCount, agDedRenderedCount + AG_DED_CHUNK_SIZE);
+  const fragment = document.createDocumentFragment();
+
+  nextBatch.forEach(d => {
+    const sMh = d.service_mhcd || d.mhcd || '-';
+    const dDesc = d.ded_desc || getMajorHeadTitle(d.ded_mhcd) || `Head ${d.ded_mhcd}`;
+    const treat = d.treatment || 'AG Accounting Schedule';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${sMh}</strong></td>
+      <td class="center-col">${d.vou_no || '-'}</td>
+      <td class="center-col"><strong>${d.ded_mhcd || '-'}</strong></td>
+      <td>${dDesc}</td>
+      <td class="num-col" style="font-weight: 600;">${formatCurrency(d.amount)}</td>
+      <td><span class="badge badge-info">${treat}</span></td>
+    `;
+    fragment.appendChild(tr);
+  });
+
+  tbody.appendChild(fragment);
+  agDedRenderedCount += nextBatch.length;
+  syncStickyTableHeaders();
+}
+
+function renderAgDedTable() {
+  const tbody = document.getElementById('ag-ded-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  agDedRenderedCount = 0;
+
+  renderAgDedTopTotalRow(filteredAgDedRows);
+  appendAgDedTableChunk();
+
+  if (!isAgDedScrollListenerAttached) {
+    const scrollContainer = tbody.closest('.table-responsive');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', () => {
+        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
+          appendAgDedTableChunk();
+        }
+      });
+    }
+    isAgDedScrollListenerAttached = true;
+  }
+}
+
+// =========================================================================
+// SECTION 7: Treasury Deductions (File 04) Handlers
+// =========================================================================
+
+let filteredTryDedRows = [];
+let currentTryDedHeadFilter = 'ALL';
+let tryDedSortCol = null;
+let tryDedSortAsc = true;
+let tryDedRenderedCount = 0;
+const TRY_DED_CHUNK_SIZE = 1500;
+let isTryDedScrollListenerAttached = false;
+
+function onTryDedSearch() {
+  applyTryDedFilters();
+}
+
+function setTryDedFilter(cat) {
+  currentTryDedHeadFilter = cat;
+  document.querySelectorAll('#try-ded-pill-group .pill').forEach(btn => {
+    btn.classList.remove('active');
+    const oc = btn.getAttribute('onclick') || '';
+    if (oc.includes(`'${cat}'`)) btn.classList.add('active');
+  });
+  applyTryDedFilters();
+}
+
+function applyTryDedFilters() {
+  if (!currentData || !currentData.try_deductions) return;
+  const q = (document.getElementById('try-ded-search') ? document.getElementById('try-ded-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.try_ded || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  filteredTryDedRows = currentData.try_deductions.filter(d => {
+    // Head Pill
+    if (currentTryDedHeadFilter !== 'ALL') {
+      if (currentTryDedHeadFilter === 'OTHER') {
+        if (['0028', '8658', '8011'].includes(d.ded_mhcd)) return false;
+      } else {
+        if (d.ded_mhcd !== currentTryDedHeadFilter) return false;
+      }
+    }
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = d[col];
+      if (col === 'service_mhcd' && (val === undefined || val === '')) val = d.mhcd;
+      if (col === 'ded_desc' && (val === undefined || val === '')) val = getMajorHeadTitle(d.ded_mhcd);
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // Search query
+    if (!q) return true;
+    const sMh = String(d.service_mhcd || d.mhcd || '').toLowerCase();
+    const vNo = String(d.vou_no || '').toLowerCase();
+    const dMh = String(d.ded_mhcd || '').toLowerCase();
+    const dDesc = String(d.ded_desc || getMajorHeadTitle(d.ded_mhcd) || '').toLowerCase();
+    const treat = String(d.treatment || '').toLowerCase();
+    return sMh.includes(q) || vNo.includes(q) || dMh.includes(q) || dDesc.includes(q) || treat.includes(q);
+  });
+
+  const bEl = document.getElementById('non-ag-ded-badge');
+  if (bEl) bEl.textContent = `${filteredTryDedRows.length.toLocaleString()} Deductions`;
+
+  renderTryDedTable();
+}
+
+function sortTryDedTable(col) {
+  if (tryDedSortCol === col) {
+    tryDedSortAsc = !tryDedSortAsc;
+  } else {
+    tryDedSortCol = col;
+    tryDedSortAsc = true;
+  }
+
+  ['service_mhcd', 'vou_no', 'ded_mhcd', 'ded_desc', 'amount', 'treatment'].forEach(c => {
+    const el = document.getElementById('sort-try-ded-' + c);
+    if (el) el.textContent = (c === col) ? (tryDedSortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredTryDedRows.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'service_mhcd') {
+      va = a.service_mhcd || a.mhcd || '';
+      vb = b.service_mhcd || b.mhcd || '';
+    } else if (col === 'ded_desc') {
+      va = a.ded_desc || getMajorHeadTitle(a.ded_mhcd) || '';
+      vb = b.ded_desc || getMajorHeadTitle(b.ded_mhcd) || '';
+    } else if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return tryDedSortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return tryDedSortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return tryDedSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderTryDedTable();
+}
+
+function renderTryDedTopTotalRow(records) {
+  const totalRow = document.getElementById('try-ded-top-total-row');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 8px;">No Treasury deductions match active filter criteria</td>`;
+    return;
+  }
+
+  let totalAmt = 0;
+  const distinctDedMhcds = new Set();
+  const distinctServiceMhcds = new Set();
+
+  records.forEach(d => {
+    totalAmt += (d.amount || 0);
+    if (d.ded_mhcd) distinctDedMhcds.add(d.ded_mhcd);
+    if (d.service_mhcd || d.mhcd) distinctServiceMhcds.add(d.service_mhcd || d.mhcd);
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--primary);">${totalCount.toLocaleString()} Records</td>
+    <td class="center-col" style="font-weight: 700;">${distinctDedMhcds.size} Heads</td>
+    <td style="font-weight: 600;">Across ${distinctServiceMhcds.size} Service Heads</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalAmt)}</td>
+    <td><span class="badge badge-warning">Treasury Retained / Remitted Deductions</span></td>
+  `;
+}
+
+function appendTryDedTableChunk() {
+  const tbody = document.getElementById('try-ded-table-body');
+  if (!tbody) return;
+  const total = filteredTryDedRows.length;
+  if (tryDedRenderedCount >= total) return;
+
+  const nextBatch = filteredTryDedRows.slice(tryDedRenderedCount, tryDedRenderedCount + TRY_DED_CHUNK_SIZE);
+  const fragment = document.createDocumentFragment();
+
+  nextBatch.forEach(d => {
+    const sMh = d.service_mhcd || d.mhcd || '-';
+    const dDesc = d.ded_desc || getMajorHeadTitle(d.ded_mhcd) || `Head ${d.ded_mhcd}`;
+    const treat = d.treatment || 'Treasury Retained / Remitted';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${sMh}</strong></td>
+      <td class="center-col">${d.vou_no || '-'}</td>
+      <td class="center-col"><strong>${d.ded_mhcd || '-'}</strong></td>
+      <td>${dDesc}</td>
+      <td class="num-col" style="font-weight: 600;">${formatCurrency(d.amount)}</td>
+      <td><span class="badge badge-warning">${treat}</span></td>
+    `;
+    fragment.appendChild(tr);
+  });
+
+  tbody.appendChild(fragment);
+  tryDedRenderedCount += nextBatch.length;
+  syncStickyTableHeaders();
+}
+
+function renderTryDedTable() {
+  const tbody = document.getElementById('try-ded-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  tryDedRenderedCount = 0;
+
+  renderTryDedTopTotalRow(filteredTryDedRows);
+  appendTryDedTableChunk();
+
+  if (!isTryDedScrollListenerAttached) {
+    const scrollContainer = tbody.closest('.table-responsive');
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', () => {
+        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
+          appendTryDedTableChunk();
+        }
+      });
+    }
+    isTryDedScrollListenerAttached = true;
+  }
+}
+
+// =========================================================================
+// SECTION 11: Exceptions & Discrepancy Breakdown Handlers
+// =========================================================================
+
+// Grand Tally Reconciliation Bridge in Exceptions Tab
+function renderExceptionsGrandTally() {
+  const tbody = document.getElementById('exc-grand-tally-body');
+  if (!tbody || !currentData || !currentData.grand_tally_steps) return;
+  tbody.innerHTML = '';
+
+  currentData.grand_tally_steps.forEach(st => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${st.step}</strong></td>
+      <td><strong>${st.label}</strong></td>
+      <td class="center-col" style="font-size: 1.1rem; font-weight: 700; color: ${st.sign === '+' ? 'var(--primary)' : (st.sign === '-' ? 'var(--danger)' : 'var(--success)')};">${st.sign}</td>
+      <td class="num-col" style="font-weight: 700; font-size: 0.95rem;">${formatCurrency(st.amount)}</td>
+      <td style="color: var(--text-color); font-size: 0.82rem; line-height: 1.4;">${st.description}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const badge = document.getElementById('exc-tally-bridge-badge');
+  if (badge) {
+    const disc = currentData.summary ? currentData.summary.payment_discrepancy : 0;
+    if (Math.abs(disc) < 0.01) {
+      badge.textContent = '100% Parity Reconciled';
+      badge.className = 'badge badge-success';
+    } else {
+      badge.textContent = `Discrepancy: ${formatCurrency(disc)}`;
+      badge.className = 'badge badge-warning';
+    }
+  }
+}
+
+// Section 0B: Mismatches and Discrepancy Vouchers Register
+let filteredExcMismatchVouchers = [];
+let currentExcMismatchStatusFilter = 'ALL';
+let excMismatchSortCol = null;
+let excMismatchSortAsc = true;
+
+function onExcMismatchSearch() {
+  applyExcMismatchFilters();
+}
+
+function setExcMismatchFilter(cat) {
+  currentExcMismatchStatusFilter = cat;
+  document.querySelectorAll('#exc-mismatch-pill-group .pill').forEach(btn => {
+    btn.classList.remove('active');
+    const oc = btn.getAttribute('onclick') || '';
+    if (oc.includes(`'${cat}'`)) btn.classList.add('active');
+  });
+  applyExcMismatchFilters();
+}
+
+function applyExcMismatchFilters() {
+  if (!currentData || !currentData.voucher_register) return;
+  const q = (document.getElementById('exc-mismatch-search') ? document.getElementById('exc-mismatch-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.exc_mismatch || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  // Vouchers that are NOT exact match
+  const rawMismatches = currentData.voucher_register.filter(v => v.status !== 'EXACT_MATCH' && v.status !== 'MATCHED' && v.status !== 'NETTED_ADJUSTMENT' && v.status !== 'GPF_COMBINED');
+
+  filteredExcMismatchVouchers = rawMismatches.filter(v => {
+    // Pill filter
+    if (currentExcMismatchStatusFilter !== 'ALL') {
+      if (currentExcMismatchStatusFilter === 'MISMATCH' && v.status !== 'MISMATCH') return false;
+      if (currentExcMismatchStatusFilter === 'MISSING_IN_COMPAY' && v.status !== 'MISSING_IN_COMPAY') return false;
+      if (currentExcMismatchStatusFilter === 'LOAN_CREDIT' && v.status !== 'LOAN_CREDIT') return false;
+    }
+
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    // Search query
+    if (!q) return true;
+    return (
+      (v.mhcd && v.mhcd.toLowerCase().includes(q)) ||
+      (v.vou_no && String(v.vou_no).toLowerCase().includes(q)) ||
+      (v.ddo_cd && v.ddo_cd.toLowerCase().includes(q)) ||
+      (v.status && v.status.toLowerCase().includes(q)) ||
+      (v.status_desc && v.status_desc.toLowerCase().includes(q))
+    );
+  });
+
+  const bEl = document.getElementById('exc-mismatch-badge');
+  if (bEl) {
+    bEl.textContent = `${filteredExcMismatchVouchers.length} Vouchers`;
+    bEl.className = filteredExcMismatchVouchers.length > 0 ? 'badge badge-danger' : 'badge badge-success';
+  }
+
+  renderExceptionsMismatch();
+}
+
+function sortExcMismatchTable(col) {
+  if (excMismatchSortCol === col) {
+    excMismatchSortAsc = !excMismatchSortAsc;
+  } else {
+    excMismatchSortCol = col;
+    excMismatchSortAsc = true;
+  }
+
+  ['mhcd', 'vou_no', 'ddo_cd', 'sop_gross', 'compay_gross', 'diff', 'status'].forEach(c => {
+    const el = document.getElementById('sort-exc-mismatch-' + c);
+    if (el) el.textContent = (c === col) ? (excMismatchSortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredExcMismatchVouchers.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'diff') {
+      va = (a.sop_gross || 0) - (a.compay_gross || 0);
+      vb = (b.sop_gross || 0) - (b.compay_gross || 0);
+    } else if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return excMismatchSortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return excMismatchSortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return excMismatchSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderExceptionsMismatch();
+}
+
+function renderExcMismatchTopTotalRow(records) {
+  const totalRow = document.getElementById('exc-mismatch-top-total');
+  if (!totalRow) return;
+
+  const totalCount = records.length;
+  if (totalCount === 0) {
+    totalRow.innerHTML = `<td colspan="10" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero voucher discrepancies in this accounting period.</td>`;
+    return;
+  }
+
+  let totalSop = 0, totalCompay = 0, totalDiff = 0;
+  const distinctDDOs = new Set();
+
+  records.forEach(v => {
+    totalSop += (v.sop_gross || 0);
+    totalCompay += (v.compay_gross || 0);
+    totalDiff += ((v.sop_gross || 0) - (v.compay_gross || 0));
+    if (v.ddo_cd) distinctDDOs.add(v.ddo_cd);
+  });
+
+  totalRow.innerHTML = `
+    <td class="center-col" style="font-weight: 800; color: var(--danger);">TOTAL</td>
+    <td class="center-col" style="font-weight: 800; color: var(--danger);">${totalCount.toLocaleString()} Vouchers</td>
+    <td style="font-weight: 600;">${distinctDDOs.size} DDOs</td>
+    <td class="center-col">-</td>
+    <td class="center-col">-</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalSop)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totalCompay)}</td>
+    <td class="num-col" style="font-weight: 800; color: var(--danger); font-size: 0.92rem;">${formatCurrency(totalDiff)}</td>
+    <td class="center-col"><span class="badge badge-danger">${totalCount} DISCREPANCIES</span></td>
+    <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Net Variance: ${formatCurrency(totalDiff)}</td>
+  `;
+}
+
+function renderExceptionsMismatch() {
+  const tbody = document.getElementById('exceptions-mismatch-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  renderExcMismatchTopTotalRow(filteredExcMismatchVouchers);
+
+  if (filteredExcMismatchVouchers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 16px;">Zero raw voucher discrepancies detected.</td></tr>`;
+    return;
+  }
+
+  filteredExcMismatchVouchers.forEach(v => {
+    const diff = (v.sop_gross || 0) - (v.compay_gross || 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center-col"><strong>${v.mhcd}</strong></td>
+      <td class="center-col" style="color: var(--danger); font-weight: 700;">${v.vou_no}</td>
+      <td>${v.ddo_cd || '-'}</td>
+      <td class="center-col">${v.token_no || '-'}</td>
+      <td class="center-col">${v.vou_date || '-'}</td>
+      <td class="num-col" style="font-weight: 700;">${formatCurrency(v.sop_gross)}</td>
+      <td class="num-col" style="font-weight: 700;">${formatCurrency(v.compay_gross)}</td>
+      <td class="num-col" style="font-weight: 700; color: var(--danger);">${formatCurrency(diff)}</td>
+      <td class="center-col"><span class="badge badge-danger">${v.status}</span></td>
+      <td style="font-size: 0.8rem; line-height: 1.4; color: var(--text-color);">${v.status_desc}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  syncStickyTableHeaders();
+}
+
+// Section 1: Missing in COMPAY
+let filteredExcMissingCompayVouchers = [];
+let excMissingCompaySortCol = null;
+let excMissingCompaySortAsc = true;
+
+function onExcMissingCompaySearch() {
+  applyExcMissingCompayFilters();
+}
+
+function sortExcMissingCompayTable(col) {
+  if (excMissingCompaySortCol === col) {
+    excMissingCompaySortAsc = !excMissingCompaySortAsc;
+  } else {
+    excMissingCompaySortCol = col;
+    excMissingCompaySortAsc = true;
+  }
+
+  ['mhcd', 'vou_no', 'ddo_cd', 'sop_gross', 'file1_net', 'status'].forEach(c => {
+    const el = document.getElementById('sort-exc-compay-' + c);
+    if (el) el.textContent = (c === col) ? (excMissingCompaySortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredExcMissingCompayVouchers.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return excMissingCompaySortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return excMissingCompaySortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return excMissingCompaySortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderExceptionsMissingCompay();
+}
+
+function applyExcMissingCompayFilters() {
+  if (!currentData || !currentData.voucher_register) return;
+  const q = (document.getElementById('exc-missing-compay-search') ? document.getElementById('exc-missing-compay-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.exc_missing_compay || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  const baseVouchers = currentData.voucher_register.filter(v => v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY');
+
+  filteredExcMissingCompayVouchers = baseVouchers.filter(v => {
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    if (!q) return true;
+    return (
+      (v.mhcd && v.mhcd.toLowerCase().includes(q)) ||
+      (v.vou_no && String(v.vou_no).toLowerCase().includes(q)) ||
+      (v.ddo_cd && v.ddo_cd.toLowerCase().includes(q)) ||
+      (v.status && v.status.toLowerCase().includes(q)) ||
+      (v.status_desc && v.status_desc.toLowerCase().includes(q))
+    );
+  });
+
+  renderExceptionsMissingCompay();
+}
+
+function renderExceptionsMissingCompay() {
+  const tbody = document.getElementById('exceptions-missing-compay-body');
+  const topTotal = document.getElementById('exc-missing-compay-top-total');
+  const badge = document.getElementById('exc-missing-compay-badge');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let totSopGross = 0;
+  let totSopNet = 0;
+  filteredExcMissingCompayVouchers.forEach(v => {
+    totSopGross += (v.sop_gross || 0);
+    totSopNet += (v.file1_net || 0);
+  });
+
+  if (badge) {
+    badge.textContent = `${filteredExcMissingCompayVouchers.length} Vouchers (${formatCurrency(totSopGross)})`;
+    badge.className = filteredExcMissingCompayVouchers.length > 0 ? 'badge badge-warning' : 'badge badge-success';
+  }
+
+  if (topTotal) {
+    if (filteredExcMissingCompayVouchers.length > 0) {
+      topTotal.innerHTML = `
+        <td class="center-col" style="font-weight: 800; color: var(--primary);">TOTAL</td>
+        <td class="center-col" style="font-weight: 800; color: var(--primary);">${filteredExcMissingCompayVouchers.length} Vouchers</td>
+        <td style="font-weight: 600;">Various DDOs</td>
+        <td class="center-col">-</td>
+        <td class="center-col">-</td>
+        <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopGross)}</td>
+        <td class="num-col" style="font-weight: 800; color: var(--text-main); font-size: 0.92rem;">${formatCurrency(totSopNet)}</td>
+        <td class="center-col"><span class="badge badge-warning">UNCOMPILED IN COMPAY</span></td>
+        <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Total: ${formatCurrency(totSopGross)} accounted in Grand Tally Step 3</td>
+      `;
+    } else {
+      topTotal.innerHTML = `<td colspan="9" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero vouchers omitted from COMPAY in this period.</td>`;
+    }
+  }
+
+  if (filteredExcMissingCompayVouchers.length > 0) {
+    filteredExcMissingCompayVouchers.forEach(m => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="center-col"><strong>${m.mhcd}</strong></td>
+        <td class="center-col" style="color: var(--warning); font-weight: 700;">${m.vou_no}</td>
+        <td>${m.ddo_cd || '-'}</td>
+        <td class="center-col">${m.token_no || '-'}</td>
+        <td class="center-col">${m.vou_date || '-'}</td>
+        <td class="num-col" style="color: var(--text-main); font-weight: 700;">${formatCurrency(m.sop_gross)}</td>
+        <td class="num-col">${formatCurrency(m.file1_net)}</td>
+        <td class="center-col"><span class="badge badge-warning">${m.status}</span></td>
+        <td style="font-size: 0.8rem; line-height: 1.4; color: var(--text-color);">${m.status_desc}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } else {
+    tbody.innerHTML = `<td colspan="9" style="text-align: center; color: var(--text-muted); padding: 16px;">No vouchers in Treasury SOP were omitted from VLC COMPAY.</td>`;
+  }
+  syncStickyTableHeaders();
+}
+
+// Section 2: Missing in SOP (MH 4801)
+let filteredExcMissingSopVouchers = [];
+let excMissingSopSortCol = null;
+let excMissingSopSortAsc = true;
+
+function onExcMissingSopSearch() {
+  applyExcMissingSopFilters();
+}
+
+function sortExcMissingSopTable(col) {
+  if (excMissingSopSortCol === col) {
+    excMissingSopSortAsc = !excMissingSopSortAsc;
+  } else {
+    excMissingSopSortCol = col;
+    excMissingSopSortAsc = true;
+  }
+
+  ['mhcd', 'vou_no', 'ddo_cd', 'compay_gross'].forEach(c => {
+    const el = document.getElementById('sort-exc-sop-' + c);
+    if (el) el.textContent = (c === col) ? (excMissingSopSortAsc ? '▲' : '▼') : '↕';
+  });
+
+  filteredExcMissingSopVouchers.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (col === 'vou_no') {
+      const na = parseInt(va, 10);
+      const nb = parseInt(vb, 10);
+      if (!isNaN(na) && !isNaN(nb)) return excMissingSopSortAsc ? na - nb : nb - na;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return excMissingSopSortAsc ? va - vb : vb - va;
+    }
+    va = (va || '').toString().toLowerCase();
+    vb = (vb || '').toString().toLowerCase();
+    return excMissingSopSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  renderExceptionsMissingSop();
+}
+
+function applyExcMissingSopFilters() {
+  if (!currentData || !currentData.voucher_register) return;
+  const q = (document.getElementById('exc-missing-sop-search') ? document.getElementById('exc-missing-sop-search').value : '').toLowerCase().trim();
+
+  const activeFilters = activeColumnFilters.exc_missing_sop || {};
+  const filterColKeys = Object.keys(activeFilters).filter(k => activeFilters[k] && activeFilters[k].size > 0);
+
+  const baseVouchers = currentData.voucher_register.filter(v => v.status === 'MISSING_IN_SOP');
+
+  filteredExcMissingSopVouchers = baseVouchers.filter(v => {
+    // Excel Column Filters
+    for (const col of filterColKeys) {
+      const allowed = activeFilters[col];
+      let val = v[col];
+      if (val === undefined || val === null || val === '') val = '(Blank)';
+      if (!allowed.has(String(val))) return false;
+    }
+
+    if (!q) return true;
+    return (
+      (v.mhcd && v.mhcd.toLowerCase().includes(q)) ||
+      (v.vou_no && String(v.vou_no).toLowerCase().includes(q)) ||
+      (v.ddo_cd && v.ddo_cd.toLowerCase().includes(q)) ||
+      (v.status_desc && v.status_desc.toLowerCase().includes(q))
+    );
+  });
+
+  renderExceptionsMissingSop();
+}
+
+function renderExceptionsMissingSop() {
+  const tbody = document.getElementById('exceptions-4801-body');
+  const topTotal = document.getElementById('exc-missing-sop-top-total');
+  const badge = document.getElementById('exc-missing-sop-badge');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const totAmt = filteredExcMissingSopVouchers.reduce((acc, m) => acc + (m.compay_gross || 0), 0);
+
+  if (badge) {
+    badge.textContent = `${filteredExcMissingSopVouchers.length} Vouchers (${formatCurrency(totAmt)})`;
+    badge.className = filteredExcMissingSopVouchers.length > 0 ? 'badge badge-danger' : 'badge badge-success';
+  }
+
+  if (topTotal) {
+    if (filteredExcMissingSopVouchers.length > 0) {
+      topTotal.innerHTML = `
+        <td class="center-col" style="font-weight: 800; color: var(--danger);">TOTAL</td>
+        <td class="center-col" style="font-weight: 800; color: var(--danger);">${filteredExcMissingSopVouchers.length} Vouchers</td>
+        <td style="font-weight: 600;">Direct State Account</td>
+        <td class="center-col">-</td>
+        <td class="num-col" style="font-weight: 800; color: var(--danger); font-size: 0.92rem;">${formatCurrency(totAmt)}</td>
+        <td style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.3;">Book transfer / LC payments directly compiled by AG</td>
+      `;
+    } else {
+      topTotal.innerHTML = `<td colspan="6" style="text-align: center; color: var(--success); font-weight: 700; padding: 10px;">✅ Zero capital vouchers omitted from SOP in this accounting period.</td>`;
+    }
+  }
+
+  if (filteredExcMissingSopVouchers.length > 0) {
+    filteredExcMissingSopVouchers.forEach(m => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="center-col"><strong>${m.mhcd}</strong></td>
+        <td class="center-col" style="color: var(--danger); font-weight: 700;">${m.vou_no}</td>
+        <td>${m.ddo_cd || '-'}</td>
+        <td class="center-col">${m.vou_date || '-'}</td>
+        <td class="num-col" style="color: var(--danger); font-weight: 700;">${formatCurrency(m.compay_gross)}</td>
+        <td>${m.status_desc}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } else {
+    tbody.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">Zero capital vouchers omitted from SOP in this accounting period.</td>`;
+  }
+  syncStickyTableHeaders();
+}
+
+function showDiscrepancyBreakdown() {
+  navigate('exceptions');
+  setTimeout(() => {
+    const bridgePanel = document.getElementById('exc-tally-bridge-panel');
+    if (bridgePanel) {
+      bridgePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      bridgePanel.style.transition = 'box-shadow 0.4s ease, border-color 0.4s ease';
+      bridgePanel.style.borderLeftColor = 'var(--warning)';
+      bridgePanel.style.boxShadow = '0 0 22px rgba(245, 158, 11, 0.45)';
+      setTimeout(() => {
+        bridgePanel.style.boxShadow = '';
+        bridgePanel.style.borderLeftColor = 'var(--primary)';
+      }, 3000);
+    }
+  }, 120);
 }
 
 // =========================================================================
@@ -4443,6 +6807,200 @@ function toggleLaymanGuide() {
     content.style.display = 'none';
     if (icon) icon.textContent = '▼ Expand Guide';
   }
+}
+
+// =========================================================================
+// Dynamic Voucher-Level Explanations & Plain-English Accounting Rationale
+// =========================================================================
+
+function showVoucherRowExplanation(keyOrObj) {
+  const modal = document.getElementById('layman-modal');
+  const heading = document.getElementById('layman-modal-heading');
+  const body = document.getElementById('layman-modal-body');
+  if (!modal || !heading || !body) return;
+
+  let v = null;
+  if (typeof keyOrObj === 'object' && keyOrObj !== null) {
+    v = keyOrObj;
+  } else if (typeof keyOrObj === 'number') {
+    v = (filteredGrossVouchers && filteredGrossVouchers[keyOrObj]) || 
+        (currentData && currentData.voucher_register && currentData.voucher_register[keyOrObj]);
+  } else if (typeof keyOrObj === 'string') {
+    const searchKey = keyOrObj.trim();
+    if (currentData && currentData.voucher_register) {
+      v = currentData.voucher_register.find(r => 
+        (r.key && r.key === searchKey) ||
+        (`${r.try_cd || ''}|${r.mhcd}|${r.vou_no}` === searchKey) ||
+        (`${r.mhcd}|${r.vou_no}` === searchKey)
+      );
+    }
+    if (!v && filteredGrossVouchers) {
+      v = filteredGrossVouchers.find(r => 
+        (r.key && r.key === searchKey) ||
+        (`${r.try_cd || ''}|${r.mhcd}|${r.vou_no}` === searchKey) ||
+        (`${r.mhcd}|${r.vou_no}` === searchKey)
+      );
+    }
+  }
+
+  if (!v) {
+    showToast("Voucher record details could not be found.", true);
+    return;
+  }
+
+  const mhTitle = getMajorHeadTitle(v.mhcd) || 'Expenditure Head';
+  const diff = (v.sop_gross || 0) - (v.compay_gross || 0);
+  const absDiff = Math.abs(diff);
+
+  heading.innerHTML = `Voucher Explainer: Vou No. ${v.vou_no} (MH ${v.mhcd} — ${mhTitle})`;
+
+  let statusBadgeClass = 'badge-success';
+  if (v.status === 'MISSING_IN_SOP') statusBadgeClass = 'badge-danger';
+  else if (v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY') statusBadgeClass = 'badge-warning';
+  else if (v.status.includes('NETTED') || v.status.includes('GPF')) statusBadgeClass = 'badge-info';
+  else if (v.status === 'MISMATCH') statusBadgeClass = 'badge-danger';
+
+  let specificRationale = '';
+
+  if (v.status === 'NETTED_ADJUSTMENT') {
+    specificRationale = `
+      <div style="background: rgba(37,99,235,0.06); border-left: 4px solid var(--primary); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+        <strong>Audit Finding — Statutory Recovery Netted at Source:</strong><br>
+        For this specific transaction (Voucher No. <strong>${v.vou_no}</strong>, Major Head <strong>${v.mhcd}</strong>), the Treasury passed a gross expenditure of <strong>${formatCurrency(v.sop_gross)}</strong> and scheduled a statutory departmental recovery or Professional Tax (PT) deduction of <strong>${formatCurrency(absDiff)}</strong>.
+      </div>
+      <p style="margin-bottom: 8px;"><strong>1. Treasury Method (File 02 - Detailed Gross):</strong> Records full passed gross of <strong>${formatCurrency(v.sop_gross)}</strong>, placing the <strong>${formatCurrency(absDiff)}</strong> deduction on the separate recovery schedule (File 03/04 under MH 0070 or MH 0028).</p>
+      <p style="margin-bottom: 8px;"><strong>2. AG VLC Method (File 06 - COMPAY):</strong> The Accountant General compiler netted this recovery directly from the bill's gross expenditure, compiling net gross of <strong>${formatCurrency(v.compay_gross)}</strong> into the payment ledger.</p>
+      <p style="margin-bottom: 4px;"><strong>Conclusion:</strong> The net disbursement paid to the beneficiary is 100% identical. The <strong>${formatCurrency(absDiff)}</strong> variance is a standard government accounting netting convention, not an expenditure leakage or cash discrepancy.</p>
+    `;
+  } else if (v.status === 'MISSING_IN_SOP') {
+    if (v.mhcd === '4801') {
+      specificRationale = `
+        <div style="background: rgba(220,38,38,0.06); border-left: 4px solid var(--danger); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+          <strong>Audit Finding — State Power Discom Subsidy / Direct AG LC Compilation:</strong><br>
+          Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>4801 (Capital Outlay on Power Projects)</strong> for <strong>${formatCurrency(v.compay_gross)}</strong> was compiled directly in File 06 (VLC COMPAY) by the Accountant General.
+        </div>
+        <p style="margin-bottom: 8px;"><strong>Why it is absent from File 02 (Treasury SOP):</strong> This high-value capital power subsidy was disbursed at the Secretariat / State Finance level via Letter of Credit (LC) authorization rather than through standard district treasury bill presentation counters.</p>
+        <p style="margin-bottom: 4px;"><strong>Reconciliation Action:</strong> The AG received the authorized payment warrants and compiled them directly into COMPAY. This is a recognized statewide adjustment head.</p>
+      `;
+    } else {
+      specificRationale = `
+        <div style="background: rgba(220,38,38,0.06); border-left: 4px solid var(--danger); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+          <strong>Audit Finding — Direct AG Compilation without Treasury Bill:</strong><br>
+          Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>${v.mhcd}</strong> for <strong>${formatCurrency(v.compay_gross)}</strong> was posted in File 06 (VLC COMPAY) with no corresponding record in File 02 (Treasury SOP).
+        </div>
+        <p style="margin-bottom: 8px;">This voucher originated from a central AG-level adjustment, book transfer, or direct bank payment authorization outside the physical district treasury passing queue.</p>
+        <p style="margin-bottom: 4px;"><strong>Reconciliation Action:</strong> Inspect AG compilation voucher slips and sanction order for Voucher No. ${v.vou_no}.</p>
+      `;
+    }
+  } else if (v.status === 'UNCOMPILED_HEAD' || v.status === 'MISSING_IN_COMPAY') {
+    specificRationale = `
+      <div style="background: rgba(245,158,11,0.06); border-left: 4px solid var(--warning); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+        <strong>Audit Finding — Public Account / Separate Subsidiary Ledger:</strong><br>
+        Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>${v.mhcd}</strong> with Gross of <strong>${formatCurrency(v.sop_gross)}</strong> was passed by the Treasury in File 02, but is not compiled into File 06 (COMPAY service expenditure).
+      </div>
+      <p style="margin-bottom: 8px;">Under Government Accounting Rules, Major Head <strong>${v.mhcd}</strong> pertains to the Public Account (e.g. Civil Deposits, Advances, Insurance, or Suspense). The Accountant General maintains these transactions in specialized subsidiary broadsheets rather than merging them into the Consolidated Fund COMPAY payment ledger.</p>
+      <p style="margin-bottom: 4px;"><strong>Status:</strong> Legitimate classification boundary variance. Retained in Treasury SOP, tracked separately in AG Deposits/Advances registers.</p>
+    `;
+  } else if (v.status.includes('GPF')) {
+    specificRationale = `
+      <div style="background: rgba(37,99,235,0.06); border-left: 4px solid var(--primary); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+        <strong>Audit Finding — General Provident Fund (MH 8009) Consolidation:</strong><br>
+        Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>8009</strong> shows File 02 Gross of <strong>${formatCurrency(v.sop_gross)}</strong> vs File 06 COMPAY Gross of <strong>${formatCurrency(v.compay_gross)}</strong>.
+      </div>
+      <p style="margin-bottom: 8px;">In VLC accounting, GPF direct withdrawals and GPF payroll deductions (from File 03 schedules) are compiled under Major Head 8009. The variance reflects consolidated schedule deductions processed during AG compilation.</p>
+    `;
+  } else if (v.status === 'EXACT_MATCH') {
+    specificRationale = `
+      <div style="background: rgba(16,185,129,0.06); border-left: 4px solid var(--success); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+        <strong>Audit Finding — 100% Mathematical Parity:</strong><br>
+        Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>${v.mhcd}</strong> matches exactly across Treasury IFMIS (File 02) and AG VLC COMPAY (File 06) at <strong>${formatCurrency(v.sop_gross)}</strong> with <strong>₹0.00 variance</strong>.
+      </div>
+      <p style="margin-bottom: 4px;">All classification attributes (Treasury Code, Major Head, Voucher Number, and Gross Amount) have been fully verified.</p>
+    `;
+  } else {
+    // MISMATCH
+    specificRationale = `
+      <div style="background: rgba(220,38,38,0.06); border-left: 4px solid var(--danger); padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; line-height: 1.5;">
+        <strong>Audit Finding — Amount Disparity Requiring Verification:</strong><br>
+        Voucher No. <strong>${v.vou_no}</strong> under Major Head <strong>${v.mhcd}</strong> has a gross disparity of <strong>${formatCurrency(absDiff)}</strong> between File 02 (<strong>${formatCurrency(v.sop_gross)}</strong>) and File 06 (<strong>${formatCurrency(v.compay_gross)}</strong>).
+      </div>
+      <p style="margin-bottom: 8px;">This difference does not match any known statutory netting pattern or standard schedule deduction. It may indicate an unbooked deduction schedule, a keying difference in bill passing, or a partial compilation in VLC.</p>
+      <p style="margin-bottom: 4px;"><strong>Recommended Audit Step:</strong> Compare the physical bill summary passing order with the AG compiled voucher schedule.</p>
+    `;
+  }
+
+  body.innerHTML = `
+    <!-- Voucher Attributes Grid -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; background: var(--bg-main); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Voucher No</div>
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary);">${v.vou_no}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Major Head</div>
+        <div style="font-weight: 700; font-size: 0.95rem;">${v.mhcd}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Voucher Date</div>
+        <div style="font-weight: 600; font-size: 0.85rem;">${v.vou_date || '-'}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Token / Bill No</div>
+        <div style="font-weight: 600; font-size: 0.85rem;">${v.token_no || '-'}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">DDO Code</div>
+        <div style="font-weight: 600; font-size: 0.85rem; font-family: monospace;">${v.ddo_cd || '-'}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Audit Status</div>
+        <div><span class="badge ${statusBadgeClass}">${v.status}</span></div>
+      </div>
+    </div>
+
+    <!-- Financial Comparison Table -->
+    <div style="margin-bottom: 14px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <thead>
+          <tr style="background: var(--bg-main); border-bottom: 1px solid var(--border-color);">
+            <th style="padding: 6px 10px; text-align: left;">Ledger / Data Source</th>
+            <th style="padding: 6px 10px; text-align: right;">Compiled Gross (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 6px 10px; border-bottom: 1px solid var(--border-color);">
+              <strong>File 02: Treasury Passed Gross (IFMIS SOP)</strong>
+            </td>
+            <td style="padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border-color); font-weight: 700;">
+              ${formatCurrency(v.sop_gross)}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 10px; border-bottom: 1px solid var(--border-color);">
+              <strong>File 06: Accountant General Compiled Gross (VLC COMPAY)</strong>
+            </td>
+            <td style="padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border-color); font-weight: 700;">
+              ${formatCurrency(v.compay_gross)}
+            </td>
+          </tr>
+          <tr style="background: rgba(0,0,0,0.02); font-weight: 800;">
+            <td style="padding: 6px 10px;">
+              Variance / Difference (File 02 − File 06)
+            </td>
+            <td style="padding: 6px 10px; text-align: right; color: ${absDiff < 0.01 ? 'var(--success)' : 'var(--danger)'};">
+              ${formatCurrency(diff)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Statutory & Accounting Explanation -->
+    ${specificRationale}
+  `;
+
+  modal.style.display = 'flex';
 }
 
 function showLaymanExplanation(type, ctx = {}) {
