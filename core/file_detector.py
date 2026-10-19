@@ -309,19 +309,26 @@ class SmartFileIdentifier:
                         for fn in os.listdir(parent_dir):
                             ext = os.path.splitext(fn)[1].lower()
                             if ext in ['.xls', '.xlsx', '.csv', '.txt'] and ("compay" in fn.lower() or "vlc" in fn.lower()):
-                                candidates.append((fn, os.path.join(parent_dir, fn)))
+                                if not re.search(r'042021|2021_08_2026|split_treasuries', fn.lower()):
+                                    candidates.append((fn, os.path.join(parent_dir, fn)))
                     except Exception:
                         pass
-                    # Check sibling folders (e.g. compay_2025_26)
+                    # Check sibling folders (e.g. compay_2025_26, monthwise)
                     try:
                         for sub in os.listdir(parent_dir):
                             sub_p = os.path.join(parent_dir, sub)
                             if os.path.isdir(sub_p) and sub_p.lower() != os.path.abspath(folder_path).lower():
                                 if "compay" in sub.lower() or "vlc" in sub.lower():
-                                    for sfn in os.listdir(sub_p):
-                                        ext = os.path.splitext(sfn)[1].lower()
-                                        if ext in ['.xls', '.xlsx', '.csv', '.txt'] and ("compay" in sfn.lower() or "vlc" in sfn.lower()):
-                                            candidates.append((sfn, os.path.join(sub_p, sfn)))
+                                    # Hard exclusion of historical archive dump directories
+                                    if re.search(r'042021|2021_08_2026|split_treasuries', sub.lower()):
+                                        continue
+                                    for root, _, sfiles in os.walk(sub_p):
+                                        for sfn in sfiles:
+                                            ext = os.path.splitext(sfn)[1].lower()
+                                            if ext in ['.xls', '.xlsx', '.csv', '.txt'] and ("compay" in sfn.lower() or "vlc" in sfn.lower()):
+                                                full_sfn = os.path.join(root, sfn)
+                                                if not re.search(r'042021|2021_08_2026|split_treasuries', full_sfn.lower()):
+                                                    candidates.append((sfn, full_sfn))
                     except Exception:
                         pass
 
@@ -520,6 +527,8 @@ class SmartFileIdentifier:
 
         def compute_candidate_score(filename, full_path):
             haystack = (filename + " " + full_path).lower()
+            if re.search(r'042021|2021_08_2026|split_treasuries', haystack) or (os.path.exists(full_path) and os.path.getsize(full_path) > 1024*1024*1024):
+                return -99999
             score = 0
             if month_tokens:
                 if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in month_tokens):
@@ -545,6 +554,14 @@ class SmartFileIdentifier:
 
         identified = {}
         logs = []
+
+        # For File 6 (COMPAY), pick the single best matching consolidated file
+        f6_candidates = [fp for fn, fp in candidates if (cls.classify_role_by_filename(fn) == "file_6" or "compay" in fn.lower() or "vlc" in fn.lower()) and not re.search(r'042021|2021_08_2026|split_treasuries', fp.lower())]
+        if f6_candidates:
+            best_f6 = cls.select_best_compay_file(f6_candidates, target_month=month, target_year=year)
+            if best_f6:
+                identified["file_6"] = best_f6
+                logs.append(f"[Best Match] Selected '{os.path.basename(best_f6)}' as FILE_6")
 
         # -------------------------------------------------------------
         # Pass 1: Filename Pattern Matching (Fast Path)
