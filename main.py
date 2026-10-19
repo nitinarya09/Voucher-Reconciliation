@@ -97,40 +97,58 @@ class DesktopReconciliationApi:
             }
         return {"file_states": file_states}
 
-    def browse_folder_and_auto_import(self, criteria=None):
+    def select_folder(self):
+        """Native folder dialog that only picks and returns the folder path without auto-scanning."""
+        selected_folder = ""
+        opened_dialog = False
+        try:
+            window = webview.windows[0] if webview.windows else None
+            if window:
+                dialog_type = getattr(webview.FileDialog, 'FOLDER', getattr(webview, 'FOLDER_DIALOG', 20))
+                res = window.create_file_dialog(dialog_type)
+                opened_dialog = True
+                if res and len(res) > 0:
+                    selected_folder = res[0]
+        except Exception:
+            opened_dialog = False
+
+        if not selected_folder and not opened_dialog:
+            try:
+                from tkinter import Tk, filedialog
+                root = Tk()
+                root.withdraw()
+                root.attributes('-topmost', True)
+                selected_folder = filedialog.askdirectory(title="Select Folder Containing All Reconciliation Files")
+                root.destroy()
+            except Exception:
+                pass
+
+        if not selected_folder or not os.path.isdir(selected_folder):
+            return {"cancelled": True}
+
+        return {
+            "success": True,
+            "folder": selected_folder,
+            "folder_name": os.path.basename(selected_folder)
+        }
+
+    def scan_folder_and_import(self, criteria=None):
         """
-        Opens native directory dialog to pick a folder containing reconciliation files,
-        automatically identifies each of the 6 files, registers them, and returns updated states.
-        Accepts optional criteria: { treasury_code, month, year, folder_path }.
+        Scans a specific folder according to the requested criteria (Treasury, Month, Year),
+        identifies matching files, registers them, and returns updated states.
         """
         criteria = criteria or {}
         selected_folder = criteria.get('folder_path', '')
         if not selected_folder:
-            opened_dialog = False
-            try:
-                window = webview.windows[0] if webview.windows else None
-                if window:
-                    dialog_type = getattr(webview.FileDialog, 'FOLDER', getattr(webview, 'FOLDER_DIALOG', 20))
-                    res = window.create_file_dialog(dialog_type)
-                    opened_dialog = True
-                    if res and len(res) > 0:
-                        selected_folder = res[0]
-            except Exception:
-                opened_dialog = False
-
-            if not selected_folder and not opened_dialog:
-                try:
-                    from tkinter import Tk, filedialog
-                    root = Tk()
-                    root.withdraw()
-                    root.attributes('-topmost', True)
-                    selected_folder = filedialog.askdirectory(title="Select Folder Containing All Reconciliation Files")
-                    root.destroy()
-                except Exception:
-                    pass
+            sel_res = self.select_folder()
+            if sel_res.get("cancelled") or not sel_res.get("folder"):
+                return {"cancelled": True}
+            selected_folder = sel_res["folder"]
 
         if not selected_folder or not os.path.isdir(selected_folder):
             return {"cancelled": True}
+
+        criteria['folder_path'] = selected_folder
 
         def _send_progress(status_text, current_file="", role="", step=0, total_steps=8):
             try:
@@ -233,9 +251,13 @@ class DesktopReconciliationApi:
             "skipped_html_count": disparity_report.get("skipped_html_count", 0) if disparity_report else 0
         }
 
+    def browse_folder_and_auto_import(self, criteria=None):
+        """Legacy helper: selects folder and scans."""
+        return self.scan_folder_and_import(criteria)
+
     def rescan_folder(self, criteria):
         """Re-evaluates an existing folder with updated treasury, month, or year parameters."""
-        return self.browse_folder_and_auto_import(criteria)
+        return self.scan_folder_and_import(criteria)
 
 
     def browse_file(self, file_id):

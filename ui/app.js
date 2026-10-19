@@ -801,28 +801,17 @@ function onIngestionParamChange() {
   const monthSelect = document.getElementById('import-month-select');
   const yearSelect = document.getElementById('import-year-select');
 
-  const criteria = {
-    treasury_code: trySelect ? trySelect.value : '052',
-    month: monthSelect ? monthSelect.value : 'ALL',
-    year: yearSelect ? yearSelect.value : '2025-26',
-    folder_path: lastScannedFolder || ''
-  };
+  const tCode = trySelect ? trySelect.value : '052';
+  const mVal = monthSelect ? monthSelect.value : '10';
+  const yVal = yearSelect ? yearSelect.value : '2025-26';
 
-  if (lastScannedFolder && window.pywebview && window.pywebview.api) {
-    showToast(`Re-scanning folder for ${criteria.month}/${criteria.year} (Treasury: ${criteria.treasury_code})...`);
-    window.pywebview.api.rescan_folder(criteria).then(function(res) {
-      if (res && res.file_states) {
-        fileStates = res.file_states;
-        renderFileCards();
-      }
-      renderFolderImportStatus(res);
-      showToast(`Auto-detected ${res.loaded_count || 0} matching files for ${criteria.month}/${criteria.year}!`);
-    }).catch(err => {
-      console.error("rescan_folder error:", err);
-    });
-  } else if (clientLastScannedFileList && clientLastScannedFileList.length > 0) {
-    showToast(`Re-filtering folder files for ${criteria.month}/${criteria.year} (Treasury: ${criteria.treasury_code})...`);
-    handleClientFileList(clientLastScannedFileList, criteria);
+  const badge = document.getElementById('folder-selection-badge');
+  if (lastScannedFolder || (clientLastScannedFileList && clientLastScannedFileList.length > 0)) {
+    if (badge) {
+      badge.textContent = `Criteria: ${tCode}/${mVal} (Click Scan)`;
+      badge.style.background = 'rgba(245, 158, 11, 0.15)';
+      badge.style.color = 'var(--warning, #d97706)';
+    }
   }
 }
 
@@ -924,50 +913,125 @@ window.onImportProgress = function(data) {
   }
 };
 
-function browseFolderAndAutoImport() {
+function browseFolderOnly() {
+  const pathDisplay = document.getElementById('selected-folder-path-display');
+  const badge = document.getElementById('folder-selection-badge');
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.select_folder) {
+    showToast("Opening folder browser...");
+    window.pywebview.api.select_folder().then(function(res) {
+      if (!res || res.cancelled || !res.folder) {
+        showToast("Folder selection cancelled.");
+        return;
+      }
+      lastScannedFolder = res.folder;
+      if (pathDisplay) {
+        pathDisplay.textContent = res.folder;
+        pathDisplay.title = res.folder;
+      }
+      if (badge) {
+        badge.textContent = 'Folder Selected (Ready to Scan)';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#10b981';
+      }
+      showToast(`Selected folder: ${res.folder_name || res.folder}. Click "Scan & Ingest Files" to start.`);
+    }).catch(function(err) {
+      console.error("select_folder error:", err);
+      showToast("Error selecting folder: " + err, true);
+    });
+  } else {
+    // Pure Web Mode / Browser Mode
+    let fi = document.getElementById('client-folder-input');
+    if (!fi) {
+      setupClientFileHandlers();
+      fi = document.getElementById('client-folder-input');
+    }
+    if (fi) {
+      fi.onchange = function(e) {
+        if (e.target.files && e.target.files.length > 0) {
+          clientLastScannedFileList = e.target.files;
+          const firstPath = e.target.files[0].webkitRelativePath || e.target.files[0].name;
+          const folderName = firstPath.includes('/') ? firstPath.split('/')[0] : (firstPath.includes('\\') ? firstPath.split('\\')[0] : 'Selected Folder');
+          lastScannedFolder = folderName;
+          if (pathDisplay) {
+            pathDisplay.textContent = `${folderName} (${e.target.files.length} files available)`;
+            pathDisplay.title = folderName;
+          }
+          if (badge) {
+            badge.textContent = `${e.target.files.length} Files Ready (Click Scan)`;
+            badge.style.background = 'rgba(16, 185, 129, 0.15)';
+            badge.style.color = '#10b981';
+          }
+          showToast(`Selected folder '${folderName}' (${e.target.files.length} files). Click "Scan & Ingest Files" to start.`);
+        }
+      };
+      fi.click();
+    } else {
+      showToast("Select files using individual browse buttons below.");
+    }
+  }
+}
+
+function startScanAndIngest() {
   const trySelect = document.getElementById('import-treasury-select');
   const monthSelect = document.getElementById('import-month-select');
   const yearSelect = document.getElementById('import-year-select');
 
   const criteria = {
     treasury_code: trySelect ? trySelect.value : '052',
-    month: monthSelect ? monthSelect.value : 'ALL',
-    year: yearSelect ? yearSelect.value : '2025-26'
+    month: monthSelect ? monthSelect.value : '10',
+    year: yearSelect ? yearSelect.value : '2025-26',
+    folder_path: lastScannedFolder || ''
   };
 
   const periodLabel = criteria.month === 'ALL' ? 'Full Financial Year' : `Month ${criteria.month}`;
   const tryLabel = criteria.treasury_code === 'ALL' ? 'All 58 Treasuries' : `Treasury ${criteria.treasury_code}`;
 
+  const pathDisplay = document.getElementById('selected-folder-path-display');
+  const badge = document.getElementById('folder-selection-badge');
   const statusEl = document.getElementById('folder-import-status');
-  if (statusEl) {
-    statusEl.style.display = 'block';
-    statusEl.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <span class="spinner" style="font-size: 1.3rem;">⏳</span>
-        <div>
-          <div style="font-weight: 700; color: var(--primary);">Opening folder selector...</div>
-          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Target: ${tryLabel} | ${periodLabel} ${criteria.year}. Please select the data directory.</div>
-        </div>
-      </div>
-    `;
-  }
-
-  // Pre-flag cards as Scanning...
-  fileCardsMeta.forEach(meta => {
-    if (!fileStates[meta.id] || !fileStates[meta.id].loaded) {
-      fileStates[meta.id] = Object.assign({}, fileStates[meta.id] || {}, {
-        statusText: '⏳ Scanning...',
-        path: 'Scanning directory...'
-      });
-    }
-  });
-  renderFileCards();
 
   if (window.pywebview && window.pywebview.api) {
-    showToast("Opening folder browser...");
-    window.pywebview.api.browse_folder_and_auto_import(criteria).then(function(res) {
+    if (!lastScannedFolder) {
+      showToast("Please choose a folder to scan first.");
+      browseFolderOnly();
+      return;
+    }
+
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+          <div>
+            <div style="font-weight: 700; color: var(--primary);">Scanning directory for reconciliation files...</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Target: ${tryLabel} | ${periodLabel} ${criteria.year} | Directory: ${escapeHtml(lastScannedFolder)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (badge) {
+      badge.textContent = '⏳ Scanning Directory...';
+      badge.style.background = 'rgba(59, 130, 246, 0.15)';
+      badge.style.color = '#3b82f6';
+    }
+
+    // Pre-flag cards as Scanning...
+    fileCardsMeta.forEach(meta => {
+      if (!fileStates[meta.id] || !fileStates[meta.id].loaded) {
+        fileStates[meta.id] = Object.assign({}, fileStates[meta.id] || {}, {
+          statusText: '⏳ Scanning...',
+          path: 'Scanning directory...'
+        });
+      }
+    });
+    renderFileCards();
+
+    showToast(`Scanning files for ${periodLabel} (${tryLabel})...`);
+    window.pywebview.api.scan_folder_and_import(criteria).then(function(res) {
       if (!res || res.cancelled) {
-        showToast("Folder selection cancelled.");
+        showToast("Scanning cancelled.");
         fileCardsMeta.forEach(meta => {
           if (fileStates[meta.id] && fileStates[meta.id].statusText) {
             delete fileStates[meta.id].statusText;
@@ -978,10 +1042,19 @@ function browseFolderAndAutoImport() {
         });
         renderFileCards();
         if (statusEl) statusEl.style.display = 'none';
+        if (badge) {
+          badge.textContent = 'Folder Selected (Ready to Scan)';
+          badge.style.background = 'rgba(16, 185, 129, 0.15)';
+          badge.style.color = '#10b981';
+        }
         return;
       }
       if (res.folder) {
         lastScannedFolder = res.folder;
+        if (pathDisplay) {
+          pathDisplay.textContent = res.folder;
+          pathDisplay.title = res.folder;
+        }
       }
       if (res.file_states) {
         fileStates = res.file_states;
@@ -991,42 +1064,60 @@ function browseFolderAndAutoImport() {
       });
       renderFileCards();
       renderFolderImportStatus(res);
-      showToast(`Successfully auto-detected and loaded ${res.loaded_count || 0} files!`);
-    }).catch(err => {
-      console.error("browse_folder_and_auto_import error:", err);
+      if (badge) {
+        const isReady = res.is_ready_to_reconcile || res.loaded_count >= 2;
+        badge.textContent = `Scanned (${res.loaded_count || 0}/6 Linked)`;
+        badge.style.background = isReady ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+        badge.style.color = isReady ? '#10b981' : 'var(--warning, #d97706)';
+      }
+      showToast(`Scan complete! Linked ${res.loaded_count || 0} files.`);
+    }).catch(function(err) {
+      console.error("scan_folder_and_import error:", err);
       fileCardsMeta.forEach(meta => {
         if (fileStates[meta.id]) delete fileStates[meta.id].statusText;
       });
       renderFileCards();
-      showToast("Folder import error: " + err, true);
+      if (badge) {
+        badge.textContent = 'Scan Error';
+        badge.style.background = 'rgba(239, 68, 68, 0.15)';
+        badge.style.color = '#ef4444';
+      }
+      showToast("Scan error: " + err, true);
     });
   } else {
-    // Web Mode folder input
-    let fi = document.getElementById('client-folder-input');
-    if (!fi) {
-      setupClientFileHandlers();
-      fi = document.getElementById('client-folder-input');
+    // Pure Web Mode / Browser Mode
+    if (!clientLastScannedFileList || clientLastScannedFileList.length === 0) {
+      showToast("Please choose a folder to scan first.");
+      browseFolderOnly();
+      return;
     }
-    if (fi) {
-      fi.onchange = function(e) {
-        if (e.target.files && e.target.files.length > 0) {
-          handleClientFileList(e.target.files, criteria);
-        } else {
-          fileCardsMeta.forEach(meta => {
-            if (fileStates[meta.id] && fileStates[meta.id].statusText) {
-              delete fileStates[meta.id].statusText;
-              if (fileStates[meta.id].path === 'Scanning directory...') fileStates[meta.id].path = '';
-            }
-          });
-          renderFileCards();
-          if (statusEl) statusEl.style.display = 'none';
-        }
-        fi.value = '';
-      };
-      fi.click();
-    } else {
-      showToast("Select files using individual browse buttons below.");
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+          <div>
+            <div style="font-weight: 700; color: var(--primary);">Analyzing browser files...</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Target: ${tryLabel} | ${periodLabel} ${criteria.year}</div>
+          </div>
+        </div>
+      `;
     }
+    if (badge) {
+      badge.textContent = '⏳ Scanning...';
+      badge.style.background = 'rgba(59, 130, 246, 0.15)';
+      badge.style.color = '#3b82f6';
+    }
+    showToast(`Scanning client files for ${periodLabel} (${tryLabel})...`);
+    handleClientFileList(clientLastScannedFileList, criteria);
+  }
+}
+
+function browseFolderAndAutoImport() {
+  if (lastScannedFolder || (clientLastScannedFileList && clientLastScannedFileList.length > 0)) {
+    startScanAndIngest();
+  } else {
+    browseFolderOnly();
   }
 }
 
@@ -1357,12 +1448,24 @@ function closeDisparityModal() {
 }
 
 function loadDefaultFiles() {
+  const pathDisplay = document.getElementById('selected-folder-path-display');
+  const badge = document.getElementById('folder-selection-badge');
+
   if (window.pywebview && window.pywebview.api) {
     showToast("Importing default files from workspace...");
     window.pywebview.api.load_default_files().then(function(res) {
       if (res && res.file_states) {
         fileStates = res.file_states;
         renderFileCards();
+      }
+      if (pathDisplay) {
+        pathDisplay.textContent = 'Default Sample Workspace (Vallabh Bhawan 10/2025)';
+        pathDisplay.title = 'Default Sample Workspace';
+      }
+      if (badge) {
+        badge.textContent = '6/6 Files Linked (Ready)';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#10b981';
       }
       showToast("Files loaded! Ready to run reconciliation.");
     }).catch(err => showToast("Error: " + err, true));
@@ -1380,6 +1483,15 @@ function loadDefaultFiles() {
       file_6: { path: 'VLC COMPAY - file 06.XLS', loaded: true, records: 10805, size: 1328618 }
     };
     renderFileCards();
+    if (pathDisplay) {
+      pathDisplay.textContent = 'Default Sample Workspace (Vallabh Bhawan 10/2025)';
+      pathDisplay.title = 'Default Sample Workspace';
+    }
+    if (badge) {
+      badge.textContent = '6/6 Files Linked (Ready)';
+      badge.style.background = 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = '#10b981';
+    }
     if (typeof BASELINE_DATA !== 'undefined' && BASELINE_DATA) {
       currentData = BASELINE_DATA;
       populateAllScreens(currentData);
@@ -3286,7 +3398,22 @@ function setupClientFileHandlers() {
 
   fiFolder.onchange = function(e) {
     if (e.target.files && e.target.files.length > 0) {
-      handleClientFileList(e.target.files);
+      clientLastScannedFileList = e.target.files;
+      const firstPath = e.target.files[0].webkitRelativePath || e.target.files[0].name;
+      const folderName = firstPath.includes('/') ? firstPath.split('/')[0] : (firstPath.includes('\\') ? firstPath.split('\\')[0] : 'Selected Folder');
+      lastScannedFolder = folderName;
+      const pathDisplay = document.getElementById('selected-folder-path-display');
+      if (pathDisplay) {
+        pathDisplay.textContent = `${folderName} (${e.target.files.length} files available)`;
+        pathDisplay.title = folderName;
+      }
+      const badge = document.getElementById('folder-selection-badge');
+      if (badge) {
+        badge.textContent = `${e.target.files.length} Files Ready (Click Scan)`;
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#10b981';
+      }
+      showToast(`Selected folder '${folderName}' (${e.target.files.length} files). Click "Scan & Ingest Files" to start.`);
     }
     fiFolder.value = '';
   };
@@ -3309,7 +3436,22 @@ function setupClientFileHandlers() {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleClientFileList(e.dataTransfer.files);
+      clientLastScannedFileList = e.dataTransfer.files;
+      const firstPath = e.dataTransfer.files[0].webkitRelativePath || e.dataTransfer.files[0].name;
+      const folderName = firstPath.includes('/') ? firstPath.split('/')[0] : (firstPath.includes('\\') ? firstPath.split('\\')[0] : 'Dropped Files');
+      lastScannedFolder = folderName;
+      const pathDisplay = document.getElementById('selected-folder-path-display');
+      if (pathDisplay) {
+        pathDisplay.textContent = `${folderName} (${e.dataTransfer.files.length} files dropped)`;
+        pathDisplay.title = folderName;
+      }
+      const badge = document.getElementById('folder-selection-badge');
+      if (badge) {
+        badge.textContent = `${e.dataTransfer.files.length} Files Ready (Click Scan)`;
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#10b981';
+      }
+      showToast(`Dropped ${e.dataTransfer.files.length} files. Click "Scan & Ingest Files" to start.`);
     }
   });
 }
