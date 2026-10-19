@@ -1854,6 +1854,23 @@
     </div>
   </div>
 
+  <!-- Treasury Disparity & Coverage Modal Dialog -->
+  <div class="modal-backdrop" id="disparity-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 840px; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 id="disparity-modal-title" style="font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+          <span>📊</span> <span id="disparity-modal-heading">Treasury Disparity & Missing Files Audit</span>
+        </h3>
+        <button class="btn-secondary btn-sm" onclick="closeDisparityModal()">✕</button>
+      </div>
+      <div class="modal-body" id="disparity-modal-body" style="font-size: 0.88rem; line-height: 1.6; color: var(--text-color); overflow-y: auto;">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeDisparityModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Export Success Modal Dialog (Adaptive for Desktop vs Web) -->
   <div class="modal-backdrop" id="export-success-modal" style="display: none;">
     <div class="modal-dialog" style="max-width: 540px; text-align: center; border-radius: 12px;">

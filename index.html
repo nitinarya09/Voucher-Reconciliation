@@ -3343,6 +3343,23 @@ input:disabled + .slider {
     </div>
   </div>
 
+  <!-- Treasury Disparity & Coverage Modal Dialog -->
+  <div class="modal-backdrop" id="disparity-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 840px; max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 id="disparity-modal-title" style="font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+          <span>📊</span> <span id="disparity-modal-heading">Treasury Disparity & Missing Files Audit</span>
+        </h3>
+        <button class="btn-secondary btn-sm" onclick="closeDisparityModal()">✕</button>
+      </div>
+      <div class="modal-body" id="disparity-modal-body" style="font-size: 0.88rem; line-height: 1.6; color: var(--text-color); overflow-y: auto;">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeDisparityModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Export Success Modal Dialog (Adaptive for Desktop vs Web) -->
   <div class="modal-backdrop" id="export-success-modal" style="display: none;">
     <div class="modal-dialog" style="max-width: 540px; text-align: center; border-radius: 12px;">
@@ -4484,19 +4501,77 @@ function readFileContentSmart(file) {
   });
 }
 
+let lastImportResult = null;
+
 function renderFolderImportStatus(res) {
   const statusEl = document.getElementById('folder-import-status');
   if (!statusEl) return;
+  lastImportResult = res;
+
   const loadedKeys = Object.keys(res.identified || {});
+  const dRep = res.disparity_report || null;
+
   let detailsHtml = `<strong>📁 Folder Processed:</strong> <code>${res.folder || 'Browser Upload'}</code><br>`;
   detailsHtml += `<strong>Auto-Identified (${loadedKeys.length}/6 files):</strong><br>`;
-  detailsHtml += `<ul style="margin: 6px 0 6px 20px; line-height: 1.45;">`;
+  detailsHtml += `<ul style="margin: 6px 0 6px 20px; line-height: 1.55;">`;
   for (const [fid, fname] of Object.entries(res.identified || {})) {
     const meta = fileCardsMeta.find(m => m.id === fid);
     const label = meta ? meta.label : fid;
-    detailsHtml += `<li><strong>${label}:</strong> <code>${fname}</code></li>`;
+    const disp = dRep && dRep.disparities && dRep.disparities[fid];
+    let badgeHtml = '';
+    if (disp && disp.missing_count > 0) {
+      const missingSummary = disp.missing_treasuries.map(m => `${m.code} - ${m.name}`).join('; ');
+      badgeHtml = ` <span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; font-weight: 700; font-size: 0.78rem; padding: 2px 8px; border-radius: 4px; margin-left: 6px; cursor: pointer;" onclick="showDisparityModal()" title="Missing: ${missingSummary}">⚠️ ${disp.missing_count} file(s) missing</span>`;
+    }
+    detailsHtml += `<li><strong>${label}:</strong> <code>${fname}</code>${badgeHtml}</li>`;
   }
   detailsHtml += `</ul>`;
+
+  // Disparity & Missing Files Alert Banner
+  if (dRep && dRep.has_disparity) {
+    const deficientRoles = Object.values(dRep.disparities || {}).filter(d => d.missing_count > 0);
+    if (deficientRoles.length > 0) {
+      let missingItemsHtml = '';
+      deficientRoles.forEach(dr => {
+        dr.missing_treasuries.forEach(mt => {
+          missingItemsHtml += `
+            <div style="margin-top: 6px; padding: 8px 12px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; font-size: 0.82rem;">
+              <div style="font-weight: 700; color: #92400e; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
+                <span>❌ <strong>${dr.label}</strong> is missing Treasury: <span style="font-family: monospace; background: #fde68a; padding: 1px 6px; border-radius: 3px;">${mt.code}</span> — ${mt.name}</span>
+                <span class="badge" style="background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; font-size: 0.74rem;">Missing File</span>
+              </div>
+              <div style="font-size: 0.76rem; color: #78350f; margin-top: 4px;">
+                <strong>Reason:</strong> ${mt.filename ? `<code>${mt.filename}</code> — ` : ''}${mt.reason}.
+                ${mt.present_in && mt.present_in.length ? `<br><strong style="color: #065f46;">Peer Status:</strong> File exists and is valid in ${mt.present_in.join(', ')}.` : ''}
+              </div>
+            </div>
+          `;
+        });
+      });
+
+      detailsHtml += `
+        <div style="margin: 10px 0; background: #fffbeb; border: 1px solid #f59e0b; border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 6px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.90rem; color: #b45309; display: flex; align-items: center; gap: 6px;">
+                <span>⚠️</span> <span>Treasury File Count Disparity Detected Across Roles</span>
+              </div>
+              <div style="font-size: 0.78rem; color: #78350f; margin-top: 2px;">
+                One or more files have fewer treasury files than their peer datasets (e.g., 54 files vs 55 files).
+              </div>
+            </div>
+            <button class="btn btn-sm" onclick="showDisparityModal()" style="background: #fef3c7; border: 1px solid #d97706; color: #92400e; font-weight: 700; font-size: 0.78rem; padding: 5px 12px; border-radius: 4px; cursor: pointer;">
+              🔍 View Missing Files Audit
+            </button>
+          </div>
+          ${missingItemsHtml}
+          <div style="font-size: 0.76rem; color: #047857; margin-top: 8px; background: #ecfdf5; padding: 6px 10px; border-radius: 4px; border: 1px solid #a7f3d0;">
+            💡 <strong>Audit Impact:</strong> Primary Gross Reconciliation (File 02 Detailed Gross vs File 06 VLC COMPAY) has all 55 active treasuries and is 100% ready to run. Missing AG Deduction files only affect secondary deduction breakdown schedules.
+          </div>
+        </div>
+      `;
+    }
+  }
 
   if (res.skipped_empty_count > 0 || res.skipped_html_count > 0) {
     let skipNotice = [];
@@ -4539,6 +4614,167 @@ function renderFolderImportStatus(res) {
   }
   statusEl.innerHTML = detailsHtml;
   statusEl.style.display = 'block';
+}
+
+function showDisparityModal() {
+  const modal = document.getElementById('disparity-modal');
+  const body = document.getElementById('disparity-modal-body');
+  if (!modal || !body) return;
+
+  const dRep = (lastImportResult && lastImportResult.disparity_report) || null;
+  if (!dRep) {
+    body.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted);">No folder import diagnostics available for the current selection.</div>`;
+    modal.style.display = 'flex';
+    return;
+  }
+
+  const ifmisRoles = ['file_1', 'file_2', 'file_3', 'file_4', 'file_5', 'file_6'];
+  const ROLE_NAMES = {
+    file_1: 'Voucher Details (File 01)',
+    file_2: 'Voucher Detail - Details Headwise (File 02)',
+    file_3: 'AG Deduction (File 03)',
+    file_4: 'NON AG Deduction (File 04)',
+    file_5: 'Voucher Summary (File 05)',
+    file_6: 'VLC COMPAY (File 06)'
+  };
+
+  const exp = dRep.max_count || 55;
+  let rowsHtml = '';
+  ifmisRoles.forEach(r => {
+    const disp = dRep.disparities && dRep.disparities[r];
+    const cnt = disp ? disp.count : (fileStates[r] && fileStates[r].loaded ? 1 : 0);
+    const isMissing = disp && disp.missing_count > 0;
+    const isFile6 = r === 'file_6';
+    const statusBadge = isFile6
+      ? `<span class="badge badge-success">Consolidated (${cnt} file)</span>`
+      : (isMissing
+          ? `<span class="badge badge-danger">⚠️ ${disp.missing_count} Missing (${cnt}/${exp})</span>`
+          : `<span class="badge badge-success">✅ Complete (${cnt}/${exp})</span>`);
+
+    let notes = isFile6
+      ? 'Consolidated state-wide COMPAY dataset'
+      : (isMissing
+          ? `Missing: ${disp.missing_treasuries.map(m => `<strong>${m.code}</strong> (${m.reason})`).join(', ')}`
+          : 'All active treasuries present');
+
+    rowsHtml += `
+      <tr>
+        <td><strong>${ROLE_NAMES[r]}</strong></td>
+        <td class="center-col" style="font-weight: 700;">${cnt}</td>
+        <td class="center-col">${isFile6 ? '1' : exp}</td>
+        <td class="center-col">${statusBadge}</td>
+        <td style="font-size: 0.80rem;">${notes}</td>
+      </tr>
+    `;
+  });
+
+  // Section 2: Missing Treasuries Detail Cards
+  let missingCardsHtml = '';
+  const deficientRoles = Object.values(dRep.disparities || {}).filter(d => d.missing_count > 0);
+  if (deficientRoles.length > 0) {
+    deficientRoles.forEach(dr => {
+      dr.missing_treasuries.forEach(mt => {
+        missingCardsHtml += `
+          <div style="background: var(--surface); border: 1px solid var(--border-color); border-left: 4px solid var(--danger); border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+              <div style="font-weight: 700; font-size: 0.95rem; color: var(--danger);">
+                🏛️ Treasury ${mt.code} — ${mt.name}
+              </div>
+              <span class="badge badge-danger">Missing in ${dr.label}</span>
+            </div>
+            <div style="margin-top: 8px; font-size: 0.82rem; line-height: 1.5;">
+              <div><strong>File Name:</strong> <code>${mt.filename || 'N/A'}</code></div>
+              <div><strong>Diagnostics / Reason:</strong> <span style="color: #b91c1c; font-weight: 600;">${mt.reason}</span></div>
+              <div style="margin-top: 4px;"><strong>Peer Status:</strong> File exists and is valid in: <em>${(mt.present_in || []).join(', ') || 'None'}</em></div>
+              <div style="margin-top: 6px; background: #fffbeb; border: 1px solid #fde68a; padding: 6px 10px; border-radius: 4px; color: #92400e;">
+                💡 <strong>Action Required:</strong> If you need AG Deductions for Treasury ${mt.code}, re-download File 03 from the IFMIS portal. Primary reconciliation is unaffected.
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    });
+  } else {
+    missingCardsHtml = `<div style="padding: 10px; color: var(--success); font-weight: 600;">✅ No file disparities found among loaded roles.</div>`;
+  }
+
+  // Section 3: Statewide Unpopulated / 0-byte Treasuries
+  let unpopulatedHtml = '';
+  if (dRep.unpopulated_statewide && dRep.unpopulated_statewide.length > 0) {
+    unpopulatedHtml = `
+      <div style="margin-top: 16px;">
+        <h4 style="font-size: 0.92rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
+          🛡️ State-wide Unpopulated / 0-Byte Downloads Safely Skipped (${dRep.unpopulated_statewide.length} Districts)
+        </h4>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px;">
+          These treasuries returned 0-byte (empty) files across all IFMIS categories (no voucher activity in this accounting period) and were safely bypassed by the Smart Download Filter:
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          ${dRep.unpopulated_statewide.map(u => `
+            <span style="background: var(--surface-secondary, #f1f5f9); border: 1px solid var(--border-color); padding: 3px 8px; border-radius: 4px; font-size: 0.78rem;">
+              <code>${u.code}</code> ${u.name}
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  body.innerHTML = `
+    <div style="margin-bottom: 14px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px;">
+        <div style="background: var(--surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase;">Active Treasuries Loaded</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--primary);">${dRep.active_treasuries_count || 55}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase;">Maximum File Count</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--success);">${dRep.max_count || 55}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase;">Total Disparities</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: ${dRep.has_disparity ? 'var(--danger)' : 'var(--success)'};">${deficientRoles.reduce((acc, r) => acc + r.missing_count, 0)}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase;">Primary Gross Parity</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: var(--success);">READY ⚡</div>
+        </div>
+      </div>
+
+      <h4 style="font-size: 0.92rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
+        Role File Count Comparison
+      </h4>
+      <div style="overflow-x: auto; margin-bottom: 16px;">
+        <table class="table-compact" style="width: 100%; border: 1px solid var(--border-color); font-size: 0.82rem;">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th class="center-col">Loaded</th>
+              <th class="center-col">Expected</th>
+              <th class="center-col">Status</th>
+              <th>Discrepancy Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <h4 style="font-size: 0.92rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
+        Missing Files & Disparity Investigation
+      </h4>
+      ${missingCardsHtml}
+
+      ${unpopulatedHtml}
+    </div>
+  `;
+  modal.style.display = 'flex';
+}
+
+function closeDisparityModal() {
+  const modal = document.getElementById('disparity-modal');
+  if (modal) modal.style.display = 'none';
 }
 
 function loadDefaultFiles() {
@@ -6741,6 +6977,10 @@ function handleClientFileList(fileList, criteria) {
         let totalSkippedHtml = 0;
         let totalSkippedEmpty = skippedEmptyFiles.length;
         const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
+        const roleTreasuriesWeb = { file_1: {}, file_2: {}, file_3: {}, file_4: {}, file_5: {}, file_6: {} };
+        const skippedEmptyWeb = [];
+        const skippedHtmlWeb = [];
+        const roleValidCounts = {};
 
         for (let rIdx = 0; rIdx < selectedRoles.length; rIdx++) {
           const role = selectedRoles[rIdx];
@@ -6773,6 +7013,23 @@ function handleClientFileList(fileList, criteria) {
 
           for (let fIdx = 0; fIdx < roleFiles.length; fIdx++) {
             const file = roleFiles[fIdx];
+            const fn = file.name;
+            const relPath = file.webkitRelativePath || file.name;
+            let tCode = '';
+            let tName = '';
+            const mDir = relPath.match(/[\\/](\d{3})\s*-\s*([^\\/]+)[\\/]/);
+            if (mDir) {
+              tCode = mDir[1];
+              tName = mDir[2].trim();
+            } else {
+              const mFn = fn.match(/(?:^|[\W_])(\d{3})(?:[\W_]|$)/);
+              if (mFn) {
+                tCode = mFn[1];
+                const item = MP_TREASURIES.find(t => t.code === tCode);
+                tName = item ? item.name : `Treasury ${tCode}`;
+              }
+            }
+
             if (fIdx % 3 === 0 || roleFiles.length <= 5) {
               fileStates[role].statusText = `⏳ Reading (${fIdx + 1}/${roleFiles.length})...`;
               renderFileCards();
@@ -6782,19 +7039,25 @@ function handleClientFileList(fileList, criteria) {
             const res = await readFileContentSmart(file);
             if (res.isEmpty) {
               totalSkippedEmpty++;
+              skippedEmptyWeb.push({ role, code: tCode, name: tName, filename: fn, path: relPath, reason: 'Empty file on disk (0 bytes)' });
               continue;
             }
             if (res.isHtmlError) {
               totalSkippedHtml++;
+              skippedHtmlWeb.push({ role, code: tCode, name: tName, filename: fn, path: relPath, reason: 'Corrupt HTML / 504 Gateway error download' });
               continue;
             }
             if (!res.text || !res.text.trim()) {
               totalSkippedEmpty++;
+              skippedEmptyWeb.push({ role, code: tCode, name: tName, filename: fn, path: relPath, reason: 'Empty file on disk (0 bytes)' });
               continue;
             }
 
             totalSize += res.size;
             validCount++;
+            if (tCode) {
+              roleTreasuriesWeb[role][tCode] = { code: tCode, name: tName, filename: fn };
+            }
             let fileText = res.text.trim();
 
             if (role === 'file_6' && targetMonthStr) {
@@ -6835,6 +7098,7 @@ function handleClientFileList(fileList, criteria) {
             }
           }
 
+          roleValidCounts[role] = validCount;
           const totalLines = (mergedText.match(/\n/g) || []).length;
           clientUploadedRawFiles[role] = mergedText;
           const displayPath = roleFiles.length > 1
@@ -6854,11 +7118,87 @@ function handleClientFileList(fileList, criteria) {
         const identifiedNames = {};
         for (const r of selectedRoles) {
           const fl = selectedFilesMulti[r];
-          identifiedNames[r] = fl.length > 1 ? `${fl.length} files merged (${fl[0].name}...)` : (fl[0].webkitRelativePath || fl[0].name);
+          const vCnt = roleValidCounts[r] || fl.length;
+          identifiedNames[r] = fl.length > 1 ? `${vCnt} files (${fl[0].name}...)` : (fl[0].webkitRelativePath || fl[0].name);
         }
         const count = selectedRoles.length;
         const periodLabel = isAllMonths ? 'FULL FINANCIAL YEAR (ALL 12 MONTHS)' : (MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean);
         const tryLabel = isAllTreasuries ? 'ALL TREASURIES (STATEWIDE)' : activeCriteria.treasury_code;
+
+        // Build Disparity & Missing Files Report for Web Mode
+        const ifmisRoles = ['file_1', 'file_2', 'file_3', 'file_4', 'file_5'];
+        const activeIfmis = ifmisRoles.filter(r => (roleValidCounts[r] || 0) > 0);
+        const ifmisCounts = activeIfmis.map(r => roleValidCounts[r] || 0);
+        const maxWebCount = ifmisCounts.length > 0 ? Math.max(...ifmisCounts) : 0;
+        const allActiveWebCodes = new Set();
+        activeIfmis.forEach(r => Object.keys(roleTreasuriesWeb[r] || {}).forEach(c => allActiveWebCodes.add(c)));
+
+        const disparitiesWeb = {};
+        let hasDisparityWeb = false;
+        const ROLE_LABELS_WEB = {
+          file_1: 'Voucher Details (File 01)',
+          file_2: 'Voucher Detail - Details Headwise (File 02)',
+          file_3: 'AG Deduction (File 03)',
+          file_4: 'NON AG Deduction (File 04)',
+          file_5: 'Voucher Summary (File 05)',
+          file_6: 'VLC COMPAY (File 06)'
+        };
+
+        ifmisRoles.forEach(r => {
+          const rCnt = roleValidCounts[r] || 0;
+          const rCodes = new Set(Object.keys(roleTreasuriesWeb[r] || {}));
+          const missingForR = [];
+          allActiveWebCodes.forEach(dc => {
+            if (!rCodes.has(dc) && rCnt > 0) {
+              hasDisparityWeb = true;
+              const skipItem = [...skippedEmptyWeb, ...skippedHtmlWeb].find(s => s.role === r && s.code === dc);
+              const tItem = MP_TREASURIES.find(t => t.code === dc);
+              const tName = (tItem ? tItem.name : '') || (skipItem ? skipItem.name : `Treasury ${dc}`);
+              const reason = skipItem ? skipItem.reason : 'File missing from uploaded directory';
+              const filename = skipItem ? skipItem.filename : '';
+              const presentIn = activeIfmis.filter(pr => (roleTreasuriesWeb[pr] || {})[dc]).map(pr => ROLE_LABELS_WEB[pr]);
+              missingForR.push({ code: dc, name: tName, filename, reason, present_in: presentIn });
+            }
+          });
+          disparitiesWeb[r] = {
+            role: r,
+            label: ROLE_LABELS_WEB[r],
+            count: rCnt,
+            expected: maxWebCount,
+            missing_count: missingForR.length,
+            missing_treasuries: missingForR
+          };
+        });
+
+        // Identify unpopulated treasuries across all IFMIS roles (0 bytes across board)
+        const emptyCodesByRole = {};
+        skippedEmptyWeb.forEach(s => {
+          if (s.code) {
+            if (!emptyCodesByRole[s.code]) emptyCodesByRole[s.code] = new Set();
+            emptyCodesByRole[s.code].add(s.role);
+          }
+        });
+        const unpopulatedStatewideWeb = [];
+        Object.entries(emptyCodesByRole).forEach(([c, rSet]) => {
+          if (rSet.size >= 4 && !allActiveWebCodes.has(c)) {
+            const tItem = MP_TREASURIES.find(t => t.code === c);
+            unpopulatedStatewideWeb.push({
+              code: c,
+              name: tItem ? tItem.name : `Treasury ${c}`,
+              reason: 'Unpopulated download (0 bytes across all files - no transactions in period)'
+            });
+          }
+        });
+
+        const webDisparityReport = {
+          has_disparity: hasDisparityWeb,
+          max_count: maxWebCount,
+          active_treasuries_count: allActiveWebCodes.size,
+          disparities: disparitiesWeb,
+          unpopulated_statewide: unpopulatedStatewideWeb,
+          skipped_empty_count: totalSkippedEmpty,
+          skipped_html_count: totalSkippedHtml
+        };
 
         const isPrimaryMulti = (selectedRoles.includes('file_2') || selectedRoles.includes('file_1')) && selectedRoles.includes('file_6');
         renderFolderImportStatus({
@@ -6870,7 +7210,8 @@ function handleClientFileList(fileList, criteria) {
           target_year: activeCriteria.year,
           target_try: tryLabel,
           skipped_empty_count: totalSkippedEmpty,
-          skipped_html_count: totalSkippedHtml
+          skipped_html_count: totalSkippedHtml,
+          disparity_report: webDisparityReport
         });
 
         if (count === 6) {

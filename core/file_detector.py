@@ -18,8 +18,127 @@ class SmartFileIdentifier:
     AG_HEADS = {"8009", "0070", "7610", "8011", "7615"}
     TRY_HEADS = {"8658", "0028", "0216", "0043", "0029"}
 
+    MP_TREASURY_NAMES = {
+        "010": "BALAGHAT TREASURY",
+        "020": "Barwani District Treasury",
+        "030": "Betul District Treasury",
+        "040": "Bhind Treasury",
+        "050": "District Treasury Office Bhopal",
+        "051": "Vindhyachal Treasury",
+        "052": "Vallabh Bhawan Treasury, Bhopal",
+        "054": "Principal Treasury Officer Centre Treasury Bhopal",
+        "060": "Chhatarpur Treasury",
+        "070": "Chhindwara Treasury",
+        "080": "Damoh Treasury",
+        "090": "Datia Treasury",
+        "100": "Dewas Treasury",
+        "110": "Dhar Treasury",
+        "120": "Dindori Treasury",
+        "130": "Guna Treasury",
+        "140": "Gwalior Gorkhi Treasury",
+        "141": "Motimahal Gwalior Treasury",
+        "150": "Harda Treasury",
+        "160": "Hoshangabad Treasury",
+        "170": "Indore District Treasury",
+        "171": "Indore City Treasury",
+        "180": "Jabalpur District Treasury",
+        "181": "Jabalpur City Treasury",
+        "190": "Jhabua Treasury",
+        "200": "Katni Treasury",
+        "210": "Khandva Treasury",
+        "220": "Khargaun Treasury",
+        "230": "Mandla Treasury",
+        "240": "Mandsaur Treasury",
+        "250": "Morena Treasury",
+        "260": "Narsinghpur Treasury",
+        "270": "Neemuch District Treasury",
+        "280": "Panna Treasury",
+        "290": "Raisen Treasury",
+        "300": "Rajgarh Treasury",
+        "310": "Ratlam Treasury",
+        "320": "Rewa Treasury",
+        "330": "Sagar Treasury",
+        "340": "Satna Treasury",
+        "350": "Sehore Treasury",
+        "360": "Seoni Treasury",
+        "370": "Shahdol Treasury",
+        "380": "Shajapur Treasury",
+        "390": "Shivpuri Treasury",
+        "400": "Sheopur Treasury",
+        "410": "Seedhi Treasury",
+        "420": "Tikamgarh Treasury",
+        "430": "Ujjain Treasury",
+        "440": "Umaria Treasury",
+        "450": "Vidisha Treasury",
+        "460": "Anupur Treasury",
+        "470": "Ashoknagar Treasury",
+        "480": "Burhanpur Treasury",
+        "490": "Alirajpur Treasury",
+        "500": "Singrauli Treasury",
+        "510": "Agar Malwa Treasury",
+        "520": "District Treasury Office Niwari",
+        "530": "District Treasury Mauganj",
+        "540": "District Treasury Pandhurna",
+        "550": "District Treasury Maihar"
+    }
+
+    last_disparity_report = None
+
     @classmethod
-    def scan_folder(cls, folder_path, treasury_code=None, month=None, year=None, check_parent_for_compay=True):
+    def get_treasury_name(cls, code):
+        if not code:
+            return ""
+        c = str(code).strip()
+        from core.data_normalizer import TREASURY_MAPPING
+        norm_c = TREASURY_MAPPING.get(c.upper(), c)
+        return cls.MP_TREASURY_NAMES.get(norm_c, f"Treasury {norm_c}")
+
+    @classmethod
+    def extract_treasury_info(cls, filename, full_path):
+        """Extracts treasury code and treasury descriptive name from file path/name."""
+        norm_path = (full_path or '').replace('/', '\\')
+        # 1. Check folder name: e.g. '054 - Principal Treasury Officer Centre Treasury Bhopal'
+        m_dir = re.search(r'[\\/](\d{3})\s*-\s*([^\\/]+)[\\/]', norm_path)
+        if m_dir:
+            code = m_dir.group(1)
+            name = m_dir.group(2).strip()
+            return code, cls.get_treasury_name(code) or name
+
+        # 2. Check filename 3-digit numeric treasury code
+        m_fn = re.search(r'(?:^|[\W_])(\d{3})(?:[\W_]|$)', filename or '')
+        if m_fn:
+            code = m_fn.group(1)
+            return code, cls.get_treasury_name(code)
+
+        # 3. Check 3-letter short code: e.g. TRY_BAL, Split-ACD
+        m_short = re.search(r'(?:TRY[_\s-]|Split-)([A-Z]{3})', filename or '', re.IGNORECASE)
+        if m_short:
+            sc = m_short.group(1).upper()
+            from core.data_normalizer import TREASURY_MAPPING
+            code = TREASURY_MAPPING.get(sc, sc)
+            return code, cls.get_treasury_name(code)
+
+        return "", ""
+
+    @classmethod
+    def classify_role_by_filename(cls, filename):
+        lfn = (filename or '').lower()
+        if "compay" in lfn or "vlc" in lfn or re.search(r'(^0?6[_\s\.-]|file[_\s-]?0?6\b)', lfn):
+            return "file_6"
+        elif re.search(r'(details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b)', lfn):
+            return "file_2"
+        elif re.search(r'(voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b)', lfn):
+            return "file_1"
+        elif re.search(r'(non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b)', lfn):
+            return "file_4"
+        elif re.search(r'(ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b)', lfn):
+            return "file_3"
+        elif re.search(r'(voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b)', lfn) or (lfn.endswith("sop.txt") and not re.match(r'^[1234][_\.]', lfn)):
+            return "file_5"
+        return None
+
+    @classmethod
+    def scan_folder(cls, folder_path, treasury_code=None, month=None, year=None, check_parent_for_compay=True, return_diagnostics=False):
         """
         Scans folder_path and identifies file_1 through file_6.
         Optionally filters/prioritizes by treasury_code (e.g. '052'/'VAL'),
@@ -131,37 +250,14 @@ class SmartFileIdentifier:
         # -------------------------------------------------------------
         if is_multi_mode:
             identified = {f"file_{i}": [] for i in range(1, 7)}
+            role_treasuries = {f"file_{i}": {} for i in range(1, 7)}
+            skipped_empty = []
+            skipped_html = []
             seen_keys = set()
             logs = []
 
             for fn, full_p in candidates:
-                # 1. Skip empty files
-                if not os.path.exists(full_p) or os.path.getsize(full_p) == 0:
-                    continue
-                # 2. Skip HTML error downloads
-                try:
-                    with open(full_p, 'rb') as f_chk:
-                        h = f_chk.read(256).lower()
-                        if b'<!doctype' in h or b'<html' in h or b'504 gateway' in h:
-                            continue
-                except Exception:
-                    pass
-
-                lfn = fn.lower()
-                role = None
-                if "compay" in lfn or "vlc" in lfn or re.search(r'(^0?6[_\s\.-]|file[_\s-]?0?6\b)', lfn):
-                    role = "file_6"
-                elif re.search(r'(details[_\s-]?headwise|headwise|gross[_\s-]?exp|detailed|classification|^0?2[_\s\.-]|file[_\s-]?0?2\b)', lfn):
-                    role = "file_2"
-                elif re.search(r'(voucher[_\s-]?details|bill[_\s-]?master|gross[_\s-]?net|^0?1[_\s\.-]|file[_\s-]?0?1\b)', lfn):
-                    role = "file_1"
-                elif re.search(r'(non[_\s-]?ag|try[_\s-]?ded|treasury[_\s-]?ded|tds|^0?4[_\s\.-]|file[_\s-]?0?4\b)', lfn):
-                    role = "file_4"
-                elif re.search(r'(ag[_\s-]?deduction|ag[_\s-]?ded|gpf|^0?3[_\s\.-]|file[_\s-]?0?3\b)', lfn):
-                    role = "file_3"
-                elif re.search(r'(voucher[_\s-]?summary|net[_\s-]?sop|netsop|^0?5[_\s\.-]|file[_\s-]?0?5\b)', lfn) or (lfn.endswith("sop.txt") and not re.match(r'^[1234][_\.]', lfn)):
-                    role = "file_5"
-
+                role = cls.classify_role_by_filename(fn)
                 if not role:
                     continue
 
@@ -174,16 +270,59 @@ class SmartFileIdentifier:
                     has_target = any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in month_tokens)
                     if not has_target:
                         matches_year = year_tokens and any(tok in haystack for tok in year_tokens)
-                        if role == "file_6" and (matches_year or "compay" in lfn):
+                        if role == "file_6" and (matches_year or "compay" in fn.lower()):
                             pass
                         else:
                             continue
+
+                t_code, t_name = cls.extract_treasury_info(fn, full_p)
+
+                # 1. Skip empty files (record for disparity analysis)
+                if not os.path.exists(full_p) or os.path.getsize(full_p) == 0:
+                    skipped_empty.append({
+                        "role": role,
+                        "code": t_code,
+                        "name": t_name,
+                        "filename": fn,
+                        "path": full_p,
+                        "reason": "Empty file on disk (0 bytes)"
+                    })
+                    continue
+
+                # 2. Skip HTML error downloads (record for disparity analysis)
+                is_html_error = False
+                try:
+                    with open(full_p, 'rb') as f_chk:
+                        h = f_chk.read(256).lower()
+                        if b'<!doctype' in h or b'<html' in h or b'504 gateway' in h:
+                            is_html_error = True
+                except Exception:
+                    pass
+
+                if is_html_error:
+                    skipped_html.append({
+                        "role": role,
+                        "code": t_code,
+                        "name": t_name,
+                        "filename": fn,
+                        "path": full_p,
+                        "reason": "Corrupt HTML / 504 Gateway error download"
+                    })
+                    continue
 
                 dedup_key = (role, fn.lower(), os.path.getsize(full_p))
                 if dedup_key in seen_keys:
                     continue
                 seen_keys.add(dedup_key)
                 identified[role].append(full_p)
+                if t_code:
+                    role_treasuries[role][t_code] = {
+                        "code": t_code,
+                        "name": t_name,
+                        "filename": fn,
+                        "path": full_p,
+                        "size": os.path.getsize(full_p)
+                    }
 
             # If File 6 contains month-specific COMPAY files, prefer them over annual split files
             if month_tokens and identified["file_6"]:
@@ -211,6 +350,83 @@ class SmartFileIdentifier:
 
             all_matched = {p for fl in identified.values() for p in fl}
             unmatched = [fn for fn, full_p in candidates if full_p not in all_matched]
+
+            # Build Disparity & Missing Files Report
+            ROLE_LABELS = {
+                "file_1": "Voucher Details (File 01)",
+                "file_2": "Voucher Detail - Details Headwise (File 02)",
+                "file_3": "AG Deduction (File 03)",
+                "file_4": "NON AG Deduction (File 04)",
+                "file_5": "Voucher Summary (File 05)",
+                "file_6": "VLC COMPAY (File 06)"
+            }
+            ifmis_roles = ["file_1", "file_2", "file_3", "file_4", "file_5"]
+            active_ifmis = [r for r in ifmis_roles if len(identified[r]) > 0]
+            counts = {r: len(identified[r]) for r in active_ifmis}
+            max_count = max(counts.values()) if counts else 0
+            all_active_codes = set().union(*[set(role_treasuries[r].keys()) for r in active_ifmis]) if active_ifmis else set()
+
+            disparities = {}
+            has_disparity = False
+            for r in ifmis_roles:
+                r_count = len(identified[r])
+                r_codes = set(role_treasuries[r].keys())
+                missing_for_r = []
+                diff_codes = all_active_codes - r_codes
+                if diff_codes and r_count > 0:
+                    has_disparity = True
+                    for dc in sorted(diff_codes):
+                        skip_item = next((s for s in skipped_empty + skipped_html if s.get("role") == r and s.get("code") == dc), None)
+                        t_name = cls.get_treasury_name(dc) or (skip_item.get("name") if skip_item else dc)
+                        reason = skip_item["reason"] if skip_item else "File missing from folder on disk"
+                        filename = skip_item["filename"] if skip_item else ""
+                        present_in = [ROLE_LABELS[pr] for pr in active_ifmis if dc in role_treasuries[pr]]
+                        missing_for_r.append({
+                            "code": dc,
+                            "name": t_name,
+                            "filename": filename,
+                            "reason": reason,
+                            "present_in": present_in
+                        })
+                disparities[r] = {
+                    "role": r,
+                    "label": ROLE_LABELS.get(r, r),
+                    "count": r_count,
+                    "expected": max_count,
+                    "missing_count": len(missing_for_r),
+                    "missing_treasuries": missing_for_r
+                }
+
+            # Identify unpopulated treasuries across all IFMIS roles (0 bytes in all roles)
+            empty_codes_by_role = {}
+            for s in skipped_empty:
+                c = s.get("code")
+                if c:
+                    empty_codes_by_role.setdefault(c, set()).add(s.get("role"))
+            unpopulated_statewide = []
+            for c, r_set in sorted(empty_codes_by_role.items()):
+                if len(r_set) >= 4 and c not in all_active_codes:
+                    unpopulated_statewide.append({
+                        "code": c,
+                        "name": cls.get_treasury_name(c),
+                        "reason": "Unpopulated download (0 bytes across all files - no transactions in period)"
+                    })
+
+            disparity_report = {
+                "has_disparity": has_disparity,
+                "max_count": max_count,
+                "active_treasuries_count": len(all_active_codes),
+                "disparities": disparities,
+                "unpopulated_statewide": unpopulated_statewide,
+                "skipped_empty": skipped_empty,
+                "skipped_html": skipped_html,
+                "skipped_empty_count": len(skipped_empty),
+                "skipped_html_count": len(skipped_html)
+            }
+            cls.last_disparity_report = disparity_report
+
+            if return_diagnostics:
+                return identified, logs, unmatched, disparity_report
             return identified, logs, unmatched
 
         def compute_candidate_score(filename, full_path):
@@ -291,6 +507,40 @@ class SmartFileIdentifier:
                 logs.append(f"[Content Fingerprint] Identified '{fn}' as {role.upper()} ({reason})")
 
         unmatched = [fn for fn, _ in remaining]
+        ROLE_LABELS = {
+            "file_1": "Voucher Details (File 01)",
+            "file_2": "Voucher Detail - Details Headwise (File 02)",
+            "file_3": "AG Deduction (File 03)",
+            "file_4": "NON AG Deduction (File 04)",
+            "file_5": "Voucher Summary (File 05)",
+            "file_6": "VLC COMPAY (File 06)"
+        }
+        disparities = {}
+        for r_id, r_lbl in ROLE_LABELS.items():
+            loaded = r_id in identified
+            disparities[r_id] = {
+                "role": r_id,
+                "label": r_lbl,
+                "count": 1 if loaded else 0,
+                "expected": 1,
+                "missing_count": 0 if loaded else 1,
+                "missing_treasuries": [] if loaded else [{"code": treasury_code or "", "name": cls.get_treasury_name(treasury_code), "reason": "Not found in directory"}]
+            }
+        disparity_report = {
+            "has_disparity": len(identified) < 6,
+            "max_count": 1,
+            "active_treasuries_count": 1 if identified else 0,
+            "disparities": disparities,
+            "unpopulated_statewide": [],
+            "skipped_empty": [],
+            "skipped_html": [],
+            "skipped_empty_count": 0,
+            "skipped_html_count": 0
+        }
+        cls.last_disparity_report = disparity_report
+
+        if return_diagnostics:
+            return identified, logs, unmatched, disparity_report
         return identified, logs, unmatched
 
     @classmethod

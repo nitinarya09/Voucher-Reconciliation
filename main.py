@@ -150,11 +150,12 @@ class DesktopReconciliationApi:
         _send_progress(f"Folder selected: '{os.path.basename(selected_folder)}'. Scanning directory...", step=1, total_steps=8)
 
         from core.file_detector import SmartFileIdentifier
-        identified, logs, unmatched = SmartFileIdentifier.scan_folder(
+        identified, logs, unmatched, disparity_report = SmartFileIdentifier.scan_folder(
             selected_folder,
             treasury_code=criteria.get('treasury_code'),
             month=criteria.get('month'),
-            year=criteria.get('year')
+            year=criteria.get('year'),
+            return_diagnostics=True
         )
 
         active_roles = [r for r, p in identified.items() if p]
@@ -226,7 +227,10 @@ class DesktopReconciliationApi:
             "unmatched": unmatched,
             "file_states": file_states,
             "is_all_ready": self._importer.is_all_6_ready(),
-            "is_ready_to_reconcile": self._importer.is_ready_to_reconcile()
+            "is_ready_to_reconcile": self._importer.is_ready_to_reconcile(),
+            "disparity_report": disparity_report,
+            "skipped_empty_count": disparity_report.get("skipped_empty_count", 0) if disparity_report else 0,
+            "skipped_html_count": disparity_report.get("skipped_html_count", 0) if disparity_report else 0
         }
 
     def rescan_folder(self, criteria):

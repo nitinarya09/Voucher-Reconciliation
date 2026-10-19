@@ -291,6 +291,44 @@ class TestVoucherReconciliationSuite(unittest.TestCase):
         total_compiled = rec_gross.get('gross_amt') + rec_fest.get('gross_amt') + rec_grain.get('gross_amt')
         self.assertEqual(total_compiled, Decimal('48400.00'))
 
+    # Test 30: Multi-file disparity detection and missing treasury diagnostics
+    def test_30_disparity_detection(self):
+        from core.file_detector import SmartFileIdentifier
+
+        # Create simulated files for two treasuries: 052 and 010
+        # Treasury 052 has all files
+        self._create_temp_file("Voucher_Details_052_2025_October_All.txt", "sample master 052\n")
+        self._create_temp_file("Voucher_Detail_Headwise_052_2025_October_All.txt", "sample exp 052\n")
+        self._create_temp_file("AG_Deduction_052_2025_October_All.txt", "sample ag 052\n")
+        self._create_temp_file("Non_AG_Deduction_052_2025_October_All.txt", "sample non ag 052\n")
+        self._create_temp_file("Voucher_Summary_052_2025_October_All.txt", "sample sop 052\n")
+
+        # Treasury 010 has File 1, 2, 4, 5 but File 3 is 0-byte (empty)
+        self._create_temp_file("Voucher_Details_010_2025_October_All.txt", "sample master 010\n")
+        self._create_temp_file("Voucher_Detail_Headwise_010_2025_October_All.txt", "sample exp 010\n")
+        self._create_temp_file("AG_Deduction_010_2025_October_All.txt", "") # 0 bytes
+        self._create_temp_file("Non_AG_Deduction_010_2025_October_All.txt", "sample non ag 010\n")
+        self._create_temp_file("Voucher_Summary_010_2025_October_All.txt", "sample sop 010\n")
+
+        iden, logs, un, disp = SmartFileIdentifier.scan_folder(
+            self.temp_dir,
+            treasury_code='ALL',
+            month='10',
+            year='2025',
+            check_parent_for_compay=False,
+            return_diagnostics=True
+        )
+
+        self.assertTrue(disp["has_disparity"])
+        self.assertEqual(disp["max_count"], 2)
+        self.assertEqual(len(iden["file_1"]), 2)
+        self.assertEqual(len(iden["file_2"]), 2)
+        self.assertEqual(len(iden["file_3"]), 1)
+        self.assertEqual(disp["disparities"]["file_3"]["missing_count"], 1)
+        missing_entry = disp["disparities"]["file_3"]["missing_treasuries"][0]
+        self.assertEqual(missing_entry["code"], "010")
+        self.assertIn("0 bytes", missing_entry["reason"])
+
 if __name__ == '__main__':
     unittest.main()
 
