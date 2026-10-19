@@ -132,6 +132,23 @@ class DesktopReconciliationApi:
         if not selected_folder or not os.path.isdir(selected_folder):
             return {"cancelled": True}
 
+        def _send_progress(status_text, current_file="", role="", step=0, total_steps=8):
+            try:
+                window = webview.windows[0] if webview.windows else None
+                if window:
+                    payload = json.dumps({
+                        "status_text": status_text,
+                        "current_file": current_file,
+                        "role": role,
+                        "step": step,
+                        "total_steps": total_steps
+                    })
+                    window.evaluate_js(f"window.onImportProgress && window.onImportProgress({payload});")
+            except Exception:
+                pass
+
+        _send_progress(f"Folder selected: '{os.path.basename(selected_folder)}'. Scanning directory...", step=1, total_steps=8)
+
         from core.file_detector import SmartFileIdentifier
         identified, logs, unmatched = SmartFileIdentifier.scan_folder(
             selected_folder,
@@ -140,10 +157,27 @@ class DesktopReconciliationApi:
             year=criteria.get('year')
         )
 
+        active_roles = [r for r, p in identified.items() if p]
+        total_steps = len(active_roles) + 2
+        step = 1
+        _send_progress(f"Found files for {len(active_roles)} roles. Importing records...", step=step, total_steps=total_steps)
+
         loaded_count = 0
+        ROLE_TITLES = {
+            "file_1": "File 01 (Bill Master)",
+            "file_2": "File 02 (Detailed Gross)",
+            "file_3": "File 03 (AG Deduction)",
+            "file_4": "File 04 (Non-AG Deduction)",
+            "file_5": "File 05 (Summary SOP)",
+            "file_6": "File 06 (VLC COMPAY)"
+        }
         for fid, path in identified.items():
             if not path:
                 continue
+            step += 1
+            disp_name = os.path.basename(path) if isinstance(path, str) else (f"{len(path)} files merged" if len(path) > 1 else (os.path.basename(path[0]) if path else "None"))
+            r_label = ROLE_TITLES.get(fid, fid.upper())
+            _send_progress(f"Importing {r_label}: {disp_name}...", current_file=disp_name, role=fid, step=step, total_steps=total_steps)
             try:
                 self._importer.register_file(
                     fid,
@@ -152,10 +186,11 @@ class DesktopReconciliationApi:
                     target_year=criteria.get('year')
                 )
                 loaded_count += 1
-                disp_name = os.path.basename(path) if isinstance(path, str) else (f"{len(path)} files merged" if len(path) > 1 else (os.path.basename(path[0]) if path else "None"))
                 self._logger.log_event("AUTO_IMPORT", f"Auto-mapped {fid.upper()} to '{disp_name}'")
             except Exception as e:
                 self._logger.log_error("AUTO_IMPORT", f"Failed to register {fid}: {e}")
+
+        _send_progress("Reconciliation files successfully loaded and verified!", step=total_steps, total_steps=total_steps)
 
         summaries = self._importer.get_all_summaries()
         file_states = {}

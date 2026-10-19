@@ -563,7 +563,7 @@ function renderFileCards() {
           <span>Records: <strong>${state && state.records ? state.records.toLocaleString() : '0'}</strong></span>
           <span>Unique Vouchers: <strong style="color: var(--primary);">${state && (state.unique_vouchers != null) ? Number(state.unique_vouchers).toLocaleString() : (state && state.records ? state.records.toLocaleString() : '0')}</strong></span>
           <span>Size: <strong>${state && state.size ? (state.size / 1024).toFixed(1) + ' KB' : '0 KB'}</strong></span>
-          <span>Status: <strong style="color: ${isLoaded ? 'var(--success)' : 'var(--warning)'};">${isLoaded ? 'Valid' : 'Pending'}</strong></span>
+          <span>Status: <strong style="color: ${(state && state.statusText) ? 'var(--primary)' : (isLoaded ? 'var(--success)' : 'var(--warning)')};">${(state && state.statusText) ? state.statusText : (isLoaded ? 'Valid' : 'Pending')}</strong></span>
         </div>
       </div>
       <div class="file-card-actions">
@@ -856,6 +856,45 @@ if (window.pywebview && window.pywebview.api) {
   }
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+window.onImportProgress = function(data) {
+  if (!data) return;
+  const statusEl = document.getElementById('folder-import-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    const pct = (data.total_steps && data.total_steps > 0) ? Math.min(100, Math.round((data.step / data.total_steps) * 100)) : 0;
+    statusEl.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="spinner" style="font-size: 1.25rem;">⏳</span>
+            <div>
+              <div style="font-weight: 700; color: var(--primary);">${escapeHtml(data.status_text || '')}</div>
+              ${data.current_file ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><code>${escapeHtml(data.current_file)}</code></div>` : ''}
+            </div>
+          </div>
+          ${pct > 0 ? `<div style="font-weight: 700; font-size: 0.9rem; color: var(--primary);">${pct}%</div>` : ''}
+        </div>
+        ${pct > 0 ? `<div style="width: 100%; height: 6px; background: rgba(0,0,0,0.08); border-radius: 3px; overflow: hidden;"><div style="width: ${pct}%; height: 100%; background: var(--primary); transition: width 0.3s ease;"></div></div>` : ''}
+      </div>
+    `;
+  }
+  if (data.role && fileStates[data.role]) {
+    fileStates[data.role].statusText = '⏳ Loading records...';
+    if (data.current_file) fileStates[data.role].path = data.current_file;
+    renderFileCards();
+  }
+};
+
 function browseFolderAndAutoImport() {
   const trySelect = document.getElementById('import-treasury-select');
   const monthSelect = document.getElementById('import-month-select');
@@ -867,11 +906,49 @@ function browseFolderAndAutoImport() {
     year: yearSelect ? yearSelect.value : '2025-26'
   };
 
+  const periodLabel = criteria.month === 'ALL' ? 'Full Financial Year' : `Month ${criteria.month}`;
+  const tryLabel = criteria.treasury_code === 'ALL' ? 'All 58 Treasuries' : `Treasury ${criteria.treasury_code}`;
+
+  const statusEl = document.getElementById('folder-import-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+        <div>
+          <div style="font-weight: 700; color: var(--primary);">Opening folder selector...</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Target: ${tryLabel} | ${periodLabel} ${criteria.year}. Please select the data directory.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Pre-flag cards as Scanning...
+  fileCardsMeta.forEach(meta => {
+    if (!fileStates[meta.id] || !fileStates[meta.id].loaded) {
+      fileStates[meta.id] = Object.assign({}, fileStates[meta.id] || {}, {
+        statusText: '⏳ Scanning...',
+        path: 'Scanning directory...'
+      });
+    }
+  });
+  renderFileCards();
+
   if (window.pywebview && window.pywebview.api) {
     showToast("Opening folder browser...");
     window.pywebview.api.browse_folder_and_auto_import(criteria).then(function(res) {
       if (!res || res.cancelled) {
         showToast("Folder selection cancelled.");
+        fileCardsMeta.forEach(meta => {
+          if (fileStates[meta.id] && fileStates[meta.id].statusText) {
+            delete fileStates[meta.id].statusText;
+            if (fileStates[meta.id].path === 'Scanning directory...') {
+              fileStates[meta.id].path = '';
+            }
+          }
+        });
+        renderFileCards();
+        if (statusEl) statusEl.style.display = 'none';
         return;
       }
       if (res.folder) {
@@ -879,12 +956,19 @@ function browseFolderAndAutoImport() {
       }
       if (res.file_states) {
         fileStates = res.file_states;
-        renderFileCards();
       }
+      fileCardsMeta.forEach(meta => {
+        if (fileStates[meta.id]) delete fileStates[meta.id].statusText;
+      });
+      renderFileCards();
       renderFolderImportStatus(res);
       showToast(`Successfully auto-detected and loaded ${res.loaded_count || 0} files!`);
     }).catch(err => {
       console.error("browse_folder_and_auto_import error:", err);
+      fileCardsMeta.forEach(meta => {
+        if (fileStates[meta.id]) delete fileStates[meta.id].statusText;
+      });
+      renderFileCards();
       showToast("Folder import error: " + err, true);
     });
   } else {
@@ -898,6 +982,15 @@ function browseFolderAndAutoImport() {
       fi.onchange = function(e) {
         if (e.target.files && e.target.files.length > 0) {
           handleClientFileList(e.target.files, criteria);
+        } else {
+          fileCardsMeta.forEach(meta => {
+            if (fileStates[meta.id] && fileStates[meta.id].statusText) {
+              delete fileStates[meta.id].statusText;
+              if (fileStates[meta.id].path === 'Scanning directory...') fileStates[meta.id].path = '';
+            }
+          });
+          renderFileCards();
+          if (statusEl) statusEl.style.display = 'none';
         }
         fi.value = '';
       };
@@ -2975,6 +3068,29 @@ function handleClientFileList(fileList, criteria) {
   const isAllTreasuries = String(activeCriteria.treasury_code).trim().toUpperCase() === 'ALL';
   const isMultiMode = isAllMonths || isAllTreasuries;
 
+  const statusEl = document.getElementById('folder-import-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+        <div>
+          <div style="font-weight: 700; color: var(--primary);">Analyzing ${files.length} files from folder...</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Matching files for Treasury: ${activeCriteria.treasury_code}, Month: ${activeCriteria.month}, Year: ${activeCriteria.year}...</div>
+        </div>
+      </div>
+    `;
+  }
+  fileCardsMeta.forEach(meta => {
+    if (!fileStates[meta.id] || !fileStates[meta.id].loaded) {
+      fileStates[meta.id] = Object.assign({}, fileStates[meta.id] || {}, {
+        statusText: '⏳ Scanning...',
+        path: 'Analyzing files...'
+      });
+    }
+  });
+  renderFileCards();
+
   const MONTH_MAP = {
     '01': ['01', 'jan', 'january'],
     '02': ['02', 'feb', 'february'],
@@ -3188,34 +3304,66 @@ function handleClientFileList(fileList, criteria) {
       let totalSkippedEmpty = skippedEmptyFiles.length;
       const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
 
-      const readPromises = selectedRoles.map(role => {
-        const roleFiles = selectedFilesMulti[role];
-        const fileReadPromises = roleFiles.map(file => readFileContentSmart(file));
+      async function executeMultiRead() {
+        let totalSkippedHtml = 0;
+        let totalSkippedEmpty = skippedEmptyFiles.length;
+        const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
 
-        return Promise.all(fileReadPromises).then(results => {
+        for (let rIdx = 0; rIdx < selectedRoles.length; rIdx++) {
+          const role = selectedRoles[rIdx];
+          const roleFiles = selectedFilesMulti[role];
+          const meta = fileCardsMeta.find(m => m.id === role);
+          const roleTitle = meta ? meta.label : role.toUpperCase();
+
+          fileStates[role] = Object.assign({}, fileStates[role] || {}, {
+            statusText: `⏳ Reading (0/${roleFiles.length})...`,
+            path: roleFiles.length > 1 ? `Merging ${roleFiles.length} files...` : roleFiles[0].name
+          });
+          renderFileCards();
+
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+                <div>
+                  <div style="font-weight: 700; color: var(--primary);">Reading & Merging ${escapeHtml(roleTitle)}...</div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Processing ${roleFiles.length} file(s) (Role ${rIdx + 1} of ${selectedRoles.length})</div>
+                </div>
+              </div>
+            `;
+          }
+
           let mergedText = '';
           let totalSize = 0;
           let validCount = 0;
 
-          results.forEach((res) => {
+          for (let fIdx = 0; fIdx < roleFiles.length; fIdx++) {
+            const file = roleFiles[fIdx];
+            if (fIdx % 3 === 0 || roleFiles.length <= 5) {
+              fileStates[role].statusText = `⏳ Reading (${fIdx + 1}/${roleFiles.length})...`;
+              renderFileCards();
+              await new Promise(r => setTimeout(r, 0));
+            }
+
+            const res = await readFileContentSmart(file);
             if (res.isEmpty) {
               totalSkippedEmpty++;
-              return;
+              continue;
             }
             if (res.isHtmlError) {
               totalSkippedHtml++;
-              return;
+              continue;
             }
             if (!res.text || !res.text.trim()) {
               totalSkippedEmpty++;
-              return;
+              continue;
             }
 
             totalSize += res.size;
             validCount++;
             let fileText = res.text.trim();
 
-            // When merging file_6 split files with a specific target month, filter lines to that month
             if (role === 'file_6' && targetMonthStr) {
               const lines = fileText.split('\n');
               if (lines.length > 1) {
@@ -3238,7 +3386,6 @@ function handleClientFileList(fileList, criteria) {
               }
             }
 
-            // Strip redundant headers after the first file
             if (mergedText.length > 0) {
               const firstNl = fileText.indexOf('\n');
               if (firstNl !== -1) {
@@ -3253,7 +3400,7 @@ function handleClientFileList(fileList, criteria) {
             } else {
               mergedText = fileText;
             }
-          });
+          }
 
           const totalLines = (mergedText.match(/\n/g) || []).length;
           clientUploadedRawFiles[role] = mergedText;
@@ -3268,11 +3415,9 @@ function handleClientFileList(fileList, criteria) {
             unique_vouchers: countUniqueVouchersInRawText(mergedText, role),
             size: totalSize
           };
-        });
-      });
+          renderFileCards();
+        }
 
-      Promise.all(readPromises).then(() => {
-        renderFileCards();
         const identifiedNames = {};
         for (const r of selectedRoles) {
           const fl = selectedFilesMulti[r];
@@ -3302,7 +3447,8 @@ function handleClientFileList(fileList, criteria) {
         } else {
           showToast(`Auto-identified ${count}/6 roles for ${periodLabel} ${activeCriteria.year}. Primary files (File 02 & File 06) still required.`);
         }
-      });
+      }
+      executeMultiRead();
     });
     return;
   }
@@ -3390,74 +3536,103 @@ function handleClientFileList(fileList, criteria) {
 
     const targetMonthStr = (!isAllMonths && activeCriteria.month) ? String(parseInt(activeCriteria.month, 10)) : null;
 
-    const readPromises = selectedRoles.map(role => {
-      const file = selectedFiles[role];
-      return readFileContentSmart(file).then(res => {
-        if (res.isEmpty || res.isHtmlError) {
-          return;
-        }
-        let text = res.text || '';
-        if (role === 'file_6' && targetMonthStr) {
-          const lines = text.split('\n');
-          if (lines.length > 1) {
-            const headerLine = lines[0];
-            const headerCols = headerLine.split(/[\t,]/).map(c => c.trim().toUpperCase());
-            const mIdx = headerCols.indexOf('MONTH');
-            if (mIdx !== -1) {
-              const filteredLines = [headerLine];
-              for (let li = 1; li < lines.length; li++) {
-                const line = lines[li];
-                if (!line.trim()) continue;
-                const cols = line.split(/[\t,]/);
-                const rowMonth = (cols[mIdx] || '').trim().replace(/\.0$/, '');
-                if (rowMonth === targetMonthStr) {
-                  filteredLines.push(line);
+      async function executeSingleRead() {
+        for (let rIdx = 0; rIdx < selectedRoles.length; rIdx++) {
+          const role = selectedRoles[rIdx];
+          const file = selectedFiles[role];
+          const meta = fileCardsMeta.find(m => m.id === role);
+          const roleTitle = meta ? meta.label : role.toUpperCase();
+
+          fileStates[role] = Object.assign({}, fileStates[role] || {}, {
+            statusText: '⏳ Reading...',
+            path: file.webkitRelativePath || file.name
+          });
+          renderFileCards();
+
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="spinner" style="font-size: 1.3rem;">⏳</span>
+                <div>
+                  <div style="font-weight: 700; color: var(--primary);">Reading ${escapeHtml(roleTitle)}...</div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><code>${escapeHtml(file.name)}</code> (${rIdx + 1} of ${selectedRoles.length})</div>
+                </div>
+              </div>
+            `;
+          }
+          await new Promise(r => setTimeout(r, 0));
+
+          const res = await readFileContentSmart(file);
+          if (res.isEmpty || res.isHtmlError) {
+            delete fileStates[role].statusText;
+            renderFileCards();
+            continue;
+          }
+
+          let text = res.text || '';
+          if (role === 'file_6' && targetMonthStr) {
+            const lines = text.split('\n');
+            if (lines.length > 1) {
+              const headerLine = lines[0];
+              const headerCols = headerLine.split(/[\t,]/).map(c => c.trim().toUpperCase());
+              const mIdx = headerCols.indexOf('MONTH');
+              if (mIdx !== -1) {
+                const filteredLines = [headerLine];
+                for (let li = 1; li < lines.length; li++) {
+                  const line = lines[li];
+                  if (!line.trim()) continue;
+                  const cols = line.split(/[\t,]/);
+                  const rowMonth = (cols[mIdx] || '').trim().replace(/\.0$/, '');
+                  if (rowMonth === targetMonthStr) {
+                    filteredLines.push(line);
+                  }
                 }
+                text = filteredLines.join('\n');
               }
-              text = filteredLines.join('\n');
             }
           }
+
+          clientUploadedRawFiles[role] = text;
+          const lineCount = (text.match(/\n/g) || []).length;
+          const displayPath = file.webkitRelativePath || file.name;
+          fileStates[role] = {
+            path: displayPath,
+            loaded: true,
+            records: lineCount,
+            unique_vouchers: countUniqueVouchersInRawText(text, role),
+            size: file.size
+          };
+          renderFileCards();
         }
-        clientUploadedRawFiles[role] = text;
-        const lineCount = (text.match(/\n/g) || []).length;
-        const displayPath = file.webkitRelativePath || file.name;
-        fileStates[role] = {
-          path: displayPath,
-          loaded: true,
-          records: lineCount,
-          unique_vouchers: countUniqueVouchersInRawText(text, role),
-          size: file.size
-        };
-      });
-    });
+        renderFileCards();
+        const identifiedNames = {};
+        for (const [r, f] of Object.entries(selectedFiles)) {
+          identifiedNames[r] = f.webkitRelativePath || f.name;
+        }
+        const count = Object.keys(selectedFiles).length;
+        const monthLabel = MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean;
 
-    Promise.all(readPromises).then(() => {
-      renderFileCards();
-      const identifiedNames = {};
-      for (const [r, f] of Object.entries(selectedFiles)) {
-        identifiedNames[r] = f.webkitRelativePath || f.name;
+        const isPrimarySingle = ((selectedFiles['file_2'] || selectedFiles['file_1']) && selectedFiles['file_6']);
+        renderFolderImportStatus({
+          folder: `${folderName} [${monthLabel} ${activeCriteria.year} — Treasury: ${activeCriteria.treasury_code}]`,
+          identified: identifiedNames,
+          is_all_ready: count === 6,
+          is_ready_to_reconcile: isPrimarySingle,
+          target_month: monthLabel,
+          target_year: activeCriteria.year,
+          target_try: activeCriteria.treasury_code
+        });
+
+        if (count === 6) {
+          showToast(`✅ All 6 files successfully loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
+        } else if (isPrimarySingle) {
+          showToast(`✅ Primary files (File 02 & File 06) loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
+        } else {
+          showToast(`Auto-identified ${count}/6 files for ${monthLabel} ${activeCriteria.year}. Primary files (File 02 & File 06) still required.`);
+        }
       }
-      const count = Object.keys(selectedFiles).length;
-      const monthLabel = MONTH_MAP[mClean] ? MONTH_MAP[mClean][1].toUpperCase() : mClean;
-
-      const isPrimarySingle = ((selectedFiles['file_2'] || selectedFiles['file_1']) && selectedFiles['file_6']);
-      renderFolderImportStatus({
-        folder: `${folderName} [${monthLabel} ${activeCriteria.year} — Treasury: ${activeCriteria.treasury_code}]`,
-        identified: identifiedNames,
-        is_all_ready: count === 6,
-        is_ready_to_reconcile: isPrimarySingle,
-        target_month: monthLabel,
-        target_year: activeCriteria.year,
-        target_try: activeCriteria.treasury_code
-      });
-
-      if (count === 6) {
-        showToast(`✅ All 6 files successfully loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
-      } else if (isPrimarySingle) {
-        showToast(`✅ Primary files (File 02 & File 06) loaded for ${monthLabel} ${activeCriteria.year}! Ready to reconcile.`);
-      } else {
-        showToast(`Auto-identified ${count}/6 files for ${monthLabel} ${activeCriteria.year}. Primary files (File 02 & File 06) still required.`);
-      }
+      executeSingleRead();
     });
   });
 }

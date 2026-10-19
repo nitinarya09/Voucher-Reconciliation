@@ -79,7 +79,10 @@ class ImportedDataset:
             if ext in ['.xlsx', '.xls']:
                 try:
                     import pandas as pd
-                    df = pd.read_excel(current_path, dtype=str)
+                    try:
+                        df = pd.read_excel(current_path, dtype=str, engine='calamine')
+                    except Exception:
+                        df = pd.read_excel(current_path, dtype=str)
                     df = df.fillna('')
 
                     # Filter by target month if specified and MONTH column exists

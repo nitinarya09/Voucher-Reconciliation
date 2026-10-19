@@ -36,17 +36,6 @@ class SmartFileIdentifier:
                     full_p = os.path.join(root, fn)
                     candidates.append((fn, full_p))
 
-        # Check parent folder for COMPAY if not present in folder
-        if check_parent_for_compay:
-            has_compay = any("compay" in fn.lower() or "vlc" in fn.lower() for fn, _ in candidates)
-            if not has_compay:
-                parent_dir = os.path.dirname(os.path.abspath(folder_path))
-                if parent_dir and os.path.exists(parent_dir):
-                    for fn in os.listdir(parent_dir):
-                        ext = os.path.splitext(fn)[1].lower()
-                        if ext in ['.xls', '.xlsx', '.csv', '.txt'] and "compay" in fn.lower():
-                            candidates.append((fn, os.path.join(parent_dir, fn)))
-
         # Month keywords helper
         MONTH_MAP = {
             '1': ['01', 'jan', 'january'], '01': ['01', 'jan', 'january'],
@@ -99,6 +88,43 @@ class SmartFileIdentifier:
                 try_tokens.extend(['051', 'vin', 'vindhyachal'])
             elif t_clean == '050' or t_clean == 'bpl':
                 try_tokens.extend(['050', 'bpl', 'bhopal'])
+
+        # Check parent and sibling folders for COMPAY (especially month-specific consolidated files)
+        if check_parent_for_compay:
+            has_month_compay = False
+            if month_tokens:
+                for fn, fp in candidates:
+                    lfn = fn.lower()
+                    if ("compay" in lfn or "vlc" in lfn) and any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', (fn + " " + fp).lower()) for tok in month_tokens):
+                        has_month_compay = True
+                        break
+
+            has_any_compay = any("compay" in fn.lower() or "vlc" in fn.lower() for fn, _ in candidates)
+
+            # If no month-specific COMPAY in folder, search parent & sibling folders
+            if not has_month_compay or not has_any_compay:
+                parent_dir = os.path.dirname(os.path.abspath(folder_path))
+                if parent_dir and os.path.exists(parent_dir):
+                    # Check files in parent dir
+                    try:
+                        for fn in os.listdir(parent_dir):
+                            ext = os.path.splitext(fn)[1].lower()
+                            if ext in ['.xls', '.xlsx', '.csv', '.txt'] and ("compay" in fn.lower() or "vlc" in fn.lower()):
+                                candidates.append((fn, os.path.join(parent_dir, fn)))
+                    except Exception:
+                        pass
+                    # Check sibling folders (e.g. compay_2025_26)
+                    try:
+                        for sub in os.listdir(parent_dir):
+                            sub_p = os.path.join(parent_dir, sub)
+                            if os.path.isdir(sub_p) and sub_p.lower() != os.path.abspath(folder_path).lower():
+                                if "compay" in sub.lower() or "vlc" in sub.lower():
+                                    for sfn in os.listdir(sub_p):
+                                        ext = os.path.splitext(sfn)[1].lower()
+                                        if ext in ['.xls', '.xlsx', '.csv', '.txt'] and ("compay" in sfn.lower() or "vlc" in sfn.lower()):
+                                            candidates.append((sfn, os.path.join(sub_p, sfn)))
+                    except Exception:
+                        pass
 
         # -------------------------------------------------------------
         # Multi-File Mode: Full Financial Year / Multi-Treasury Ingestion
