@@ -3297,6 +3297,93 @@ function setupClientFileHandlers() {
   });
 }
 
+function selectBestCompayFile(candidateFiles, targetMonth, targetYear) {
+  if (!candidateFiles || candidateFiles.length === 0) return null;
+  if (candidateFiles.length === 1) return candidateFiles[0];
+
+  const monthDict = {
+    '1': 1, '01': 1, 'jan': 1, 'january': 1,
+    '2': 2, '02': 2, 'feb': 2, 'february': 2,
+    '3': 3, '03': 3, 'mar': 3, 'march': 3,
+    '4': 4, '04': 4, 'apr': 4, 'april': 4,
+    '5': 5, '05': 5, 'may': 5,
+    '6': 6, '06': 6, 'jun': 6, 'june': 6,
+    '7': 7, '07': 7, 'jul': 7, 'july': 7,
+    '8': 8, '08': 8, 'aug': 8, 'august': 8,
+    '9': 9, '09': 9, 'sep': 9, 'sept': 9, 'september': 9,
+    '10': 10, 'oct': 10, 'october': 10,
+    '11': 11, 'nov': 11, 'november': 11,
+    '12': 12, 'dec': 12, 'december': 12
+  };
+  let mInt = 0;
+  if (targetMonth) {
+    const mClean = String(targetMonth).trim().toLowerCase();
+    mInt = monthDict[mClean] || parseInt(mClean, 10) || 0;
+  }
+  const mPad = String(mInt).padStart(2, '0');
+
+  const yStr = String(targetYear || '').trim().toLowerCase();
+  let yShort = '';
+  if (yStr.includes('-')) {
+    const parts = yStr.split('-');
+    yShort = `${parts[0]}_${parts[1]}`.toLowerCase();
+  } else if (yStr.includes('_')) {
+    yShort = yStr.toLowerCase();
+  }
+
+  const scored = [];
+  for (const f of candidateFiles) {
+    const fn = (f.name || '').toLowerCase();
+    const rel = (f.webkitRelativePath || f.name || '').toLowerCase();
+    const combined = fn + ' ' + rel;
+
+    // Hard exclusion: multi-year archive dumps (e.g. 042021 to 2026) or > 1GB files
+    if (/042021|2021_08_2026|split_treasuries/i.test(combined) || (f.size && f.size > 1024 * 1024 * 1024)) {
+      continue;
+    }
+
+    let score = 0;
+    // Target year match
+    if (yShort && combined.includes(yShort)) {
+      score += 40;
+    } else if (yStr && combined.includes(yStr)) {
+      score += 40;
+    } else if (combined.includes('2025')) {
+      score += 20;
+    }
+
+    // Target month match
+    if (mInt > 0) {
+      const splitRx = new RegExp(`compay_${mPad}_|compay_${mInt}_|split-${mInt}[_\\.]|split-${mPad}[_\\.]`, 'i');
+      const wordRx = new RegExp(`(?:[\\W_]|^)${mPad}(?:[\\W_]|$)|(?:[\\W_]|^)${mInt}(?:[\\W_]|$)`, 'i');
+      if (splitRx.test(fn)) {
+        score += 60;
+      } else if (wordRx.test(fn)) {
+        score += 30;
+      }
+    }
+
+    // Monthwise folder bonus
+    if (combined.includes('monthwise')) {
+      score += 15;
+    }
+    if (fn.endsWith('.xlsx')) {
+      score += 10;
+    }
+
+    scored.push({ score, size: f.size || 0, file: f });
+  }
+
+  if (scored.length === 0) return candidateFiles[0];
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.size - b.size; // prefer smaller matching file over multi-gigabyte dump
+  });
+
+  return scored[0].file;
+}
+
 function handleClientFileList(fileList, criteria) {
   if (!fileList || fileList.length === 0) return;
   clientLastScannedFileList = fileList;
@@ -3474,6 +3561,12 @@ function handleClientFileList(fileList, criteria) {
       }
 
       const haystack = (file.name + ' ' + (rel || '')).toLowerCase();
+      // Hard exclusion: multi-year archive dumps (e.g. 042021 to 2026) or > 1GB files
+      if (role === 'file_6') {
+        if (/042021|2021_08_2026|split_treasuries/i.test(haystack) || (file.size && file.size > 1024 * 1024 * 1024)) {
+          continue;
+        }
+      }
       if (targetTryTokens.length > 0 && !targetTryTokens.some(tok => haystack.includes(tok))) continue;
       if (targetYearTokens.length > 0 && !targetYearTokens.some(tok => haystack.includes(tok))) continue;
       if (targetMonthTokens.length > 0) {
@@ -3498,8 +3591,13 @@ function handleClientFileList(fileList, criteria) {
       selectedFilesMulti[role].push(file);
     }
 
-    // Prefer month-specific COMPAY files over annual files if available
-    if (targetMonthTokens.length > 0 && selectedFilesMulti.file_6.length > 0) {
+    // For single month reconciliations, COMPAY is a single statewide consolidated file (e.g., Split-4), NOT multiple files!
+    if (!isAllMonths && activeCriteria.month && selectedFilesMulti.file_6.length > 0) {
+      const bestF6 = selectBestCompayFile(selectedFilesMulti.file_6, activeCriteria.month, activeCriteria.year);
+      if (bestF6) {
+        selectedFilesMulti.file_6 = [bestF6];
+      }
+    } else if (targetMonthTokens.length > 0 && selectedFilesMulti.file_6.length > 0) {
       const monthSpecificF6 = selectedFilesMulti.file_6.filter(f => {
         const h = (f.name + ' ' + (f.webkitRelativePath || '')).toLowerCase();
         return targetMonthTokens.some(tok => {
@@ -3809,8 +3907,13 @@ function handleClientFileList(fileList, criteria) {
   // -------------------------------------------------------------------------
   // MODE B: SINGLE PERIOD MODE (Individual month / individual treasury)
   // -------------------------------------------------------------------------
-  function scoreFileCandidate(fn, relPath) {
+  function scoreFileCandidate(fn, relPath, role, fileSize) {
     const haystack = (fn + ' ' + (relPath || '')).toLowerCase();
+    if (role === 'file_6') {
+      if (/042021|2021_08_2026|split_treasuries/i.test(haystack) || (fileSize && fileSize > 1024 * 1024 * 1024)) {
+        return -99999;
+      }
+    }
     let score = 0;
 
     const hasTargetMonth = targetMonthTokens.some(tok => {
@@ -3838,7 +3941,7 @@ function handleClientFileList(fileList, criteria) {
     const rel = file.webkitRelativePath || file.name;
     const role = detectRoleFromFilename(file.name, rel);
     if (role) {
-      const score = scoreFileCandidate(file.name, rel);
+      const score = scoreFileCandidate(file.name, rel, role, file.size);
       candidatesByRole[role].push({ file, score, name: file.name, rel });
     } else {
       unassignedFiles.push(file);
@@ -3848,6 +3951,13 @@ function handleClientFileList(fileList, criteria) {
   const selectedFiles = {};
   for (const r of ['file_1', 'file_2', 'file_3', 'file_4', 'file_5', 'file_6']) {
     if (candidatesByRole[r].length > 0) {
+      if (r === 'file_6' && !isAllMonths && activeCriteria.month) {
+        const bestF6 = selectBestCompayFile(candidatesByRole[r].map(c => c.file), activeCriteria.month, activeCriteria.year);
+        if (bestF6) {
+          selectedFiles[r] = bestF6;
+          continue;
+        }
+      }
       candidatesByRole[r].sort((a, b) => b.score - a.score);
       const best = candidatesByRole[r][0];
       if (best.score > -100 || candidatesByRole[r].length === 1) {

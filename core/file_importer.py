@@ -94,12 +94,15 @@ class ImportedDataset:
                     if not self.headers:
                         self.headers = headers
 
-                    for row_idx, row_values in enumerate(df.values, start=2):
+                    row_extractor = self.mapper.build_row_extractor(headers)
+                    raw_values = df.values
+                    norm_rec_fn = DataNormalizer.normalize_record
+
+                    for row_idx, row_values in enumerate(raw_values, start=2):
                         self.total_lines += 1
-                        row_list = [str(v).strip() for v in row_values]
                         try:
-                            raw_mapped = self.mapper.map_record(row_list, headers)
-                            norm_rec = DataNormalizer.normalize_record(
+                            raw_mapped = row_extractor(row_values)
+                            norm_rec = norm_rec_fn(
                                 raw_mapped=raw_mapped,
                                 source_file=curr_fn,
                                 source_row=row_idx
@@ -108,7 +111,7 @@ class ImportedDataset:
                             if not norm_rec.is_valid:
                                 self.malformed_records.append(norm_rec)
                         except Exception as ex:
-                            self.malformed_records.append({"row": row_idx, "error": str(ex), "raw": row_list, "file": curr_fn})
+                            self.malformed_records.append({"row": row_idx, "error": str(ex), "raw": row_values, "file": curr_fn})
 
                         if max_records and len(self.records) >= max_records:
                             break
@@ -136,16 +139,19 @@ class ImportedDataset:
                         if header_row and not self.headers:
                             self.headers = [h.strip() for h in header_row]
 
+                    row_extractor = self.mapper.build_row_extractor(self.headers)
+                    norm_rec_fn = DataNormalizer.normalize_record
+
                     for row_idx, row in enumerate(reader, start=start_row):
                         self.total_lines += 1
                         if not row or (len(row) == 1 and not row[0].strip()):
                             self.blank_lines += 1
                             continue
 
-                        # Map raw columns to internal fields
+                        # Map raw columns to internal fields using fast extractor
                         try:
-                            raw_mapped = self.mapper.map_record(row, self.headers)
-                            norm_rec = DataNormalizer.normalize_record(
+                            raw_mapped = row_extractor(row)
+                            norm_rec = norm_rec_fn(
                                 raw_mapped=raw_mapped,
                                 source_file=curr_fn,
                                 source_row=row_idx

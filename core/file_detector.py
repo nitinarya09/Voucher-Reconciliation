@@ -138,6 +138,86 @@ class SmartFileIdentifier:
         return None
 
     @classmethod
+    def select_best_compay_file(cls, candidate_paths, target_month=None, target_year=None):
+        """
+        Picks the single highest-scoring COMPAY/VLC file for a specific target month and year,
+        preventing duplicate or accidental multi-gigabyte historical archive merges.
+        """
+        if not candidate_paths:
+            return None
+        if len(candidate_paths) == 1:
+            return candidate_paths[0]
+
+        m_int = 0
+        if target_month:
+            m_clean = str(target_month).strip().lower()
+            month_dict = {
+                '1': 1, '01': 1, 'jan': 1, 'january': 1,
+                '2': 2, '02': 2, 'feb': 2, 'february': 2,
+                '3': 3, '03': 3, 'mar': 3, 'march': 3,
+                '4': 4, '04': 4, 'apr': 4, 'april': 4,
+                '5': 5, '05': 5, 'may': 5,
+                '6': 6, '06': 6, 'jun': 6, 'june': 6,
+                '7': 7, '07': 7, 'jul': 7, 'july': 7,
+                '8': 8, '08': 8, 'aug': 8, 'august': 8,
+                '9': 9, '09': 9, 'sep': 9, 'sept': 9, 'september': 9,
+                '10': 10, 'oct': 10, 'october': 10,
+                '11': 11, 'nov': 11, 'november': 11,
+                '12': 12, 'dec': 12, 'december': 12
+            }
+            m_int = month_dict.get(m_clean, 0)
+            if m_int == 0 and m_clean.isdigit():
+                m_int = int(m_clean)
+
+        m_pad = f"{m_int:02d}"
+
+        y_str = str(target_year or "").strip()
+        y_short = ""
+        if "-" in y_str:
+            p = y_str.split("-")
+            y_short = f"{p[0]}_{p[1]}"
+        elif "_" in y_str:
+            y_short = y_str
+
+        scored = []
+        for p in candidate_paths:
+            fn = os.path.basename(p)
+            lfn = fn.lower()
+            lp = p.lower()
+
+            # Hard exclusion: multi-year archive dumps (e.g. 2021 to 2026) or > 1GB files
+            if re.search(r'042021|2021_08_2026|split_treasuries', lp) or (os.path.exists(p) and os.path.getsize(p) > 1024*1024*1024):
+                continue
+
+            score = 0
+            # Target year match
+            if y_short and (y_short.lower() in lp or y_str.lower() in lp):
+                score += 40
+            elif "2025" in lp:
+                score += 20
+
+            # Target month match
+            if m_int > 0:
+                if re.search(rf'compay_{m_pad}_|compay_{m_int}_|split-{m_int}[_\.]|split-{m_pad}[_\.]', lfn):
+                    score += 60
+                elif re.search(rf'[\W_]{m_pad}[\W_]', lfn) or re.search(rf'[\W_]{m_int}[\W_]', lfn):
+                    score += 30
+
+            # Folder bonus (monthwise directory)
+            if "monthwise" in lp:
+                score += 15
+            if lfn.endswith(".xlsx"):
+                score += 10
+
+            scored.append((score, os.path.getsize(p) if os.path.exists(p) else 0, p))
+
+        if not scored:
+            return candidate_paths[0]
+
+        scored.sort(key=lambda x: (x[0], -x[1]), reverse=True)
+        return scored[0][2]
+
+    @classmethod
     def scan_folder(cls, folder_path, treasury_code=None, month=None, year=None, check_parent_for_compay=True, return_diagnostics=False):
         """
         Scans folder_path and identifies file_1 through file_6.
@@ -261,6 +341,11 @@ class SmartFileIdentifier:
                 if not role:
                     continue
 
+                # Hard exclusion of historical archive dumps (e.g. 042021_082026, 2021_08_2026, split_treasuries, or > 1GB)
+                l_full = full_p.lower()
+                if re.search(r'042021|2021_08_2026|split_treasuries', l_full) or (os.path.exists(full_p) and os.path.getsize(full_p) > 1024*1024*1024):
+                    continue
+
                 haystack = (fn + " " + full_p).lower()
                 if try_tokens and not any(tok in haystack for tok in try_tokens):
                     continue
@@ -270,7 +355,7 @@ class SmartFileIdentifier:
                     has_target = any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', haystack) for tok in month_tokens)
                     if not has_target:
                         matches_year = year_tokens and any(tok in haystack for tok in year_tokens)
-                        if role == "file_6" and (matches_year or "compay" in fn.lower()):
+                        if role == "file_6" and not month_tokens and matches_year:
                             pass
                         else:
                             continue
@@ -324,8 +409,12 @@ class SmartFileIdentifier:
                         "size": os.path.getsize(full_p)
                     }
 
-            # If File 6 contains month-specific COMPAY files, prefer them over annual split files
-            if month_tokens and identified["file_6"]:
+            # If a specific month is requested (not ALL), pick the SINGLE BEST MATCH for File 6
+            if month and not is_all_months and identified["file_6"]:
+                best_f6 = cls.select_best_compay_file(identified["file_6"], target_month=month, target_year=year)
+                if best_f6:
+                    identified["file_6"] = [best_f6]
+            elif month_tokens and identified["file_6"]:
                 month_specific_f6 = [p for p in identified["file_6"] if any(re.search(r'(?:^|[\W_])' + re.escape(tok) + r'(?:$|[\W_])', (os.path.basename(p) + " " + p).lower()) for tok in month_tokens)]
                 if month_specific_f6:
                     identified["file_6"] = month_specific_f6

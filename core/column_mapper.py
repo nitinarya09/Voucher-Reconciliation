@@ -68,7 +68,39 @@ class ColumnMapper:
                         val = str(raw_row[idx] or "").strip()
                 mapped[target_field] = val
 
-        return mapped
+    def build_row_extractor(self, headers=None):
+        """
+        Precomputes column index to target field mapping once,
+        allowing high-speed O(1) row extraction without repeated headers.index() lookups.
+        """
+        extracted_indices = []
+        if headers:
+            header_map = {str(h).strip().upper(): idx for idx, h in enumerate(headers)}
+            for src_key, target_field in self.mapping.items():
+                s_key = str(src_key).strip().upper()
+                if s_key in header_map:
+                    extracted_indices.append((header_map[s_key], target_field))
+                elif s_key.isdigit():
+                    idx = int(s_key)
+                    if idx < len(headers):
+                        extracted_indices.append((idx, target_field))
+        else:
+            for src_key, target_field in self.mapping.items():
+                if isinstance(src_key, int) or (isinstance(src_key, str) and src_key.isdigit()):
+                    extracted_indices.append((int(src_key), target_field))
+
+        def fast_extractor(row_vals):
+            mapped = {}
+            row_len = len(row_vals)
+            for idx, target_field in extracted_indices:
+                if idx < row_len:
+                    v = row_vals[idx]
+                    mapped[target_field] = str(v).strip() if v is not None else ""
+                else:
+                    mapped[target_field] = ""
+            return mapped
+
+        return fast_extractor
 
     def validate_mapping(self, file_role="generic", matching_keys=None):
         """
