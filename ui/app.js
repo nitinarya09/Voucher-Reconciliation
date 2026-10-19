@@ -3634,7 +3634,6 @@ function handleClientFileList(fileList, criteria) {
       }
       executeSingleRead();
     });
-  });
 }
 
 let lastExportMetadata = {
