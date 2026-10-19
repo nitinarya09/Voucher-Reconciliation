@@ -298,6 +298,19 @@ class DesktopReconciliationApi:
             if not self._importer.is_ready_to_reconcile():
                 return {"error": "Please load at least File 2 (Detailed Gross) and File 6 (VLC COMPAY) before running reconciliation."}
 
+            def _send_recon_progress(msg, step=0, total_steps=6):
+                try:
+                    window = webview.windows[0] if webview.windows else None
+                    if window:
+                        payload = json.dumps({
+                            "message": msg,
+                            "step": step,
+                            "total_steps": total_steps
+                        })
+                        window.evaluate_js(f"window.onReconProgress && window.onReconProgress({payload});")
+                except Exception:
+                    pass
+
             # Build key fields list
             key_fields = []
             if key_config.get("try_cd", True): key_fields.append("try_cd")
@@ -312,16 +325,22 @@ class DesktopReconciliationApi:
             mh_scope = key_config.get("mh_scope_0001_5999", True)
             target_month = key_config.get("target_month")
 
+            import gc
+            gc.collect()
+
             self._engine = ComprehensiveReconciliationEngine(
                 self._importer,
                 key_fields=key_fields,
                 tolerance=Decimal(str(tolerance)),
                 logger=self._logger,
                 mh_scope_consolidated=mh_scope,
-                target_month=target_month
+                target_month=target_month,
+                progress_callback=_send_recon_progress
             )
-            self._last_results = self._engine.execute()
-            return self._last_results
+            ui_results = self._engine.execute()
+            self._last_results = self._engine.get_full_results()
+            gc.collect()
+            return ui_results
         except Exception as e:
             import traceback
             traceback.print_exc()

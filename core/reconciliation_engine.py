@@ -40,7 +40,7 @@ def is_consolidated_fund(mhcd):
 
 
 class ComprehensiveReconciliationEngine:
-    def __init__(self, import_manager, key_fields=None, tolerance=Decimal('0.00'), logger=None, mh_scope_consolidated=True, target_month=None):
+    def __init__(self, import_manager, key_fields=None, tolerance=Decimal('0.00'), logger=None, mh_scope_consolidated=True, target_month=None, progress_callback=None):
         self.importer = import_manager
         self.key_fields = key_fields or ["try_cd", "mhcd", "vou_no"]
         self.tolerance = tolerance
@@ -48,10 +48,19 @@ class ComprehensiveReconciliationEngine:
         self.target_month = str(target_month).strip() if target_month and str(target_month).strip().upper() != 'ALL' else None
         self.matcher = MatchingEngine(key_fields=self.key_fields, tolerance=self.tolerance)
         self.logger = logger or AuditLogger()
+        self.progress_callback = progress_callback
         self.results = None
+        self._full_voucher_register = None
 
     def execute(self):
         """Runs the complete reconciliation pipeline across all 6 files."""
+        def _notify(msg, step, total=6):
+            if self.progress_callback:
+                try:
+                    self.progress_callback(msg, step, total)
+                except Exception:
+                    pass
+
         self.logger.log_event("START", "Initiating comprehensive 6-file reconciliation pipeline.")
         datasets = self.importer.files
 
@@ -107,27 +116,31 @@ class ComprehensiveReconciliationEngine:
                             base_k = (r.get('try_cd'), r.get('mhcd'), r.get('vou_no'))
                             if base_k in f1_ddo_lookup:
                                 r.data['ddo_cd'] = f1_ddo_lookup[base_k]
+            del f1_ddo_lookup
 
         # 2. Cross-File Consistency Checks (Section 12)
+        _notify("Running 12 cross-file statutory consistency checks...", 1, 6)
         validator = CrossFileValidator(datasets, self.matcher)
         checks_results = validator.run_all_checks()
         checks_dicts = [c.to_dict() for c in checks_results]
 
         # 3. Multi-Head Consolidation
+        _notify("Consolidating multi-head expenditure and deduction components...", 2, 6)
         # Group File 1 (Bills)
         f1_map = {self.matcher.build_key(r): r for r in ds1.records if (not self.mh_scope_consolidated or is_consolidated_fund(r.get('mhcd')))} if ds1 and ds1.is_loaded else {}
         # Group File 5 (Net)
         f5_map = {self.matcher.build_key(r): r for r in ds5.records if (not self.mh_scope_consolidated or is_consolidated_fund(r.get('mhcd')))} if ds5 and ds5.is_loaded else {}
 
-        # Group File 2 (Gross Classification Lines)
-        f2_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'records': []})
+        # Group File 2 (Gross Classification Lines) - O(1) memory per voucher
+        f2_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'rep': None})
         if ds2 and ds2.is_loaded:
             for r in ds2.records:
                 if self.mh_scope_consolidated and not is_consolidated_fund(r.get('mhcd')):
                     continue
                 k = self.matcher.build_key(r)
                 f2_grp[k]['gross'] += (r.get('gross_amt') or Decimal('0.00'))
-                f2_grp[k]['records'].append(r)
+                if f2_grp[k]['rep'] is None:
+                    f2_grp[k]['rep'] = r
 
         # Group File 3 (AG Deductions: GPF 8009 vs Recoveries vs Loans)
         f3_gpf_grp = defaultdict(Decimal)
@@ -152,24 +165,23 @@ class ComprehensiveReconciliationEngine:
                 k = self.matcher.build_key(r)
                 f4_grp[k] += (r.get('ded_amt') or Decimal('0.00'))
 
-        # Group COMPAY Payments
-        cp_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'records': []})
+        # Group COMPAY Payments - O(1) memory per voucher
+        cp_grp = defaultdict(lambda: {'gross': Decimal('0.00'), 'rep': None})
         for r in cp_payments:
             sec_m = str(r.get('sec_mhcd') or '').strip()
             m = str(r.get('mhcd') or '').strip()
             effective_m = '8009' if sec_m == '8009' else m
             if self.mh_scope_consolidated and not is_consolidated_fund(effective_m):
                 continue
-            # For comparison of Major Head 8009 with File 2:
-            # Gross payment vouchers have sec_mhcd == '8009'.
-            # Rows where mhcd == '8009' and sec_mhcd != '8009' are GPF deductions from salary bills (File 3).
             if m == '8009' and sec_m != '8009':
                 continue
             k = self.matcher.build_key(r)
             cp_grp[k]['gross'] += (r.get('gross_amt') or Decimal('0.00'))
-            cp_grp[k]['records'].append(r)
+            if cp_grp[k]['rep'] is None:
+                cp_grp[k]['rep'] = r
 
         # 4. Master 3-Way Voucher Matcher
+        _notify("Executing master 3-way voucher matching...", 3, 6)
         all_voucher_keys = set(f2_grp.keys()) | set(cp_grp.keys()) | set(f1_map.keys()) | set(f5_map.keys())
         voucher_register = []
 
@@ -178,10 +190,10 @@ class ComprehensiveReconciliationEngine:
         for k in sorted(all_voucher_keys):
             f1_rec = f1_map.get(k)
             f5_rec = f5_map.get(k)
-            f2_data = f2_grp.get(k, {'gross': Decimal('0.00'), 'records': []})
-            cp_data = cp_grp.get(k, {'gross': Decimal('0.00'), 'records': []})
+            f2_data = f2_grp.get(k, {'gross': Decimal('0.00'), 'rep': None})
+            cp_data = cp_grp.get(k, {'gross': Decimal('0.00'), 'rep': None})
 
-            rep = f1_rec or (f2_data['records'][0] if f2_data['records'] else (cp_data['records'][0] if cp_data['records'] else f5_rec))
+            rep = f1_rec or f2_data['rep'] or cp_data['rep'] or f5_rec
             try_cd = rep.get('try_cd', '')
             mhcd = rep.get('mhcd', '')
             if self.mh_scope_consolidated and not is_consolidated_fund(mhcd):
@@ -298,16 +310,31 @@ class ComprehensiveReconciliationEngine:
             {"step": 11, "label": "COMPAY Grand Total", "sign": "=", "amount": float(tot_cp_grand), "description": "Final compilation grand total matching the file to the last rupee"}
         ]
 
-        # 6. Major Head Summary
-        all_mhs = sorted(list(set(v['mhcd'] for v in voucher_register if v['mhcd'])), key=lambda x: (int(x) if x.isdigit() else 99999, x))
+        # 6. Major Head Summary - O(N) single-pass aggregation
+        _notify("Aggregating Major Head summaries and parity...", 4, 6)
+        head_wise_acc = defaultdict(lambda: {
+            "cp_g": 0.0, "sop_g": 0.0, "ag_d": 0.0, "try_d": 0.0, "net_s": 0.0
+        })
+        for v in voucher_register:
+            mh = v.get('mhcd')
+            if not mh:
+                continue
+            acc = head_wise_acc[mh]
+            acc["cp_g"] += v['compay_gross']
+            acc["sop_g"] += v['sop_gross']
+            acc["ag_d"] += v['ag_ded']
+            acc["try_d"] += v['try_ded']
+            acc["net_s"] += v['file1_net']
+
+        all_mhs = sorted(list(head_wise_acc.keys()), key=lambda x: (int(x) if x.isdigit() else 99999, x))
         head_wise = []
         for mh in all_mhs:
-            m_vouchers = [v for v in voucher_register if v['mhcd'] == mh]
-            cp_g = sum(v['compay_gross'] for v in m_vouchers)
-            sop_g = sum(v['sop_gross'] for v in m_vouchers)
-            ag_d = sum(v['ag_ded'] for v in m_vouchers)
-            try_d = sum(v['try_ded'] for v in m_vouchers)
-            net_s = sum(v['file1_net'] for v in m_vouchers)
+            data = head_wise_acc[mh]
+            cp_g = data["cp_g"]
+            sop_g = data["sop_g"]
+            ag_d = data["ag_d"]
+            try_d = data["try_d"]
+            net_s = data["net_s"]
             diff_g = cp_g - sop_g
 
             if abs(diff_g) < 0.01: h_st = "EXACT MATCH"
@@ -438,6 +465,7 @@ class ComprehensiveReconciliationEngine:
         all_head_keys = sorted(set(f2_heads.keys()) | set(f6_heads.keys()))
         tally_list = []
         tally_counts = defaultdict(int)
+        _notify("Reconciling 15-digit budget classifications...", 5, 6)
 
         for k in all_head_keys:
             d2 = f2_heads.get(k, {'gross': Decimal('0.00'), 'count': 0, 'mhcd': ''})
@@ -489,13 +517,14 @@ class ComprehensiveReconciliationEngine:
                         else:
                             v_desc = f"Voucher {v_key}: File 2 gross ₹{vg2:,.2f} vs COMPAY gross ₹{vg6:,.2f} (Δ ₹{v_diff:,.2f})"
 
-                        diff_v_items.append({
-                            "vou_no": v_key,
-                            "f2_gross": vg2,
-                            "f6_gross": vg6,
-                            "diff": v_diff,
-                            "reason": v_desc
-                        })
+                        if len(diff_v_items) < 50:
+                            diff_v_items.append({
+                                "vou_no": v_key,
+                                "f2_gross": vg2,
+                                "f6_gross": vg6,
+                                "diff": v_diff,
+                                "reason": v_desc
+                            })
 
                 breakdown = diff_v_items
 
@@ -664,6 +693,21 @@ class ComprehensiveReconciliationEngine:
             treasury_display = "052 (VAL)" if top_try in ['052', 'VAL'] else top_try
             treasury_badge_text = f"Treasury: {treasury_display} — {period_abbr}"
 
+        _notify("Finalizing reconciliation results...", 6, 6)
+        self._full_voucher_register = voucher_register
+
+        # For web UI display over PyWebView bridge:
+        # If total vouchers exceed 50,000, send all exceptions + up to 25,000 exact matches.
+        # This keeps the IPC payload lightweight (~10 MB instead of 300 MB), preventing
+        # Chromium V8 out-of-memory crashes while keeping 100% of vouchers available in Python
+        # for full Excel/CSV/PDF export.
+        if len(voucher_register) > 50000:
+            exceptions_part = [v for v in voucher_register if v['status'] != 'EXACT_MATCH']
+            exact_part = [v for v in voucher_register if v['status'] == 'EXACT_MATCH'][:25000]
+            ui_voucher_register = exceptions_part + exact_part
+        else:
+            ui_voucher_register = voucher_register
+
         self.results = {
             "run_id": self.logger.run_id,
             "accounting_period": accounting_period,
@@ -700,7 +744,7 @@ class ComprehensiveReconciliationEngine:
             },
             "grand_tally_steps": grand_tally_steps,
             "head_wise": head_wise,
-            "voucher_register": voucher_register,
+            "voucher_register": ui_voucher_register,
             "cross_file_checks": checks_dicts,
             "transfer_entries": te_list,
             "ddo_wise": ddo_list,
@@ -723,4 +767,13 @@ class ComprehensiveReconciliationEngine:
         self.logger.save_log()
 
         return self.results
+
+    def get_full_results(self):
+        """Returns results with complete 100% voucher register for offline exporters."""
+        if not self.results:
+            return None
+        res = dict(self.results)
+        if self._full_voucher_register is not None:
+            res["voucher_register"] = self._full_voucher_register
+        return res
 

@@ -1504,6 +1504,23 @@ function closeModal() {
   if (modal) modal.style.display = 'none';
 }
 
+window.onReconProgress = function(data) {
+  if (!data) return;
+  const btns = [
+    document.getElementById('btn-quick-run'),
+    document.getElementById('recon-run-btn'),
+    document.getElementById('btn-recon-import-pane'),
+    document.getElementById('btn-recon-import-bottom')
+  ].filter(Boolean);
+  const stepText = (data.step && data.total_steps) ? `[${data.step}/${data.total_steps}] ` : '';
+  const msg = `${stepText}${data.message || 'Processing...'}`;
+  btns.forEach(b => {
+    b.disabled = true;
+    b.innerHTML = `<span>⏳</span> ${escapeHtml(msg.slice(0, 35))}...`;
+  });
+  showToast(msg);
+};
+
 function runFullReconciliation() {
   const btns = [
     document.getElementById('btn-quick-run'),
@@ -1513,7 +1530,7 @@ function runFullReconciliation() {
   ].filter(Boolean);
   btns.forEach(b => {
     b.disabled = true;
-    b.innerHTML = '<span>⏳</span> Processing...';
+    b.innerHTML = '<span>⏳</span> Initializing...';
   });
   showToast("Executing multi-file reconciliation pipeline...");
 

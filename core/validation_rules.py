@@ -82,9 +82,13 @@ class CrossFileValidator:
         tot2 = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds2.records)
         diff = tot1 - tot2
 
-        # Record level matching
-        g1 = self.matcher.group_by_key(ds1.records)
-        g2 = self.matcher.group_by_key(ds2.records)
+        # Record level matching using streaming Decimal aggregation (O(1) memory per key)
+        g1 = defaultdict(Decimal)
+        for r in ds1.records:
+            g1[self.matcher.build_key(r)] += (r.get('gross_amt') or Decimal('0.00'))
+        g2 = defaultdict(Decimal)
+        for r in ds2.records:
+            g2[self.matcher.build_key(r)] += (r.get('gross_amt') or Decimal('0.00'))
         all_keys = set(g1.keys()) | set(g2.keys())
 
         passed = 0
@@ -92,15 +96,14 @@ class CrossFileValidator:
         exceptions = []
 
         for k in all_keys:
-            r1 = g1.get(k, [])
-            r2 = g2.get(k, [])
-            amt1 = sum((r.get('gross_amt') or Decimal('0.00')) for r in r1)
-            amt2 = sum((r.get('gross_amt') or Decimal('0.00')) for r in r2)
+            amt1 = g1.get(k, Decimal('0.00'))
+            amt2 = g2.get(k, Decimal('0.00'))
             if abs(amt1 - amt2) <= self.matcher.tolerance:
                 passed += 1
             else:
                 failed += 1
-                exceptions.append({"key": k, "f1_gross": float(amt1), "f2_gross": float(amt2), "diff": float(amt1 - amt2)})
+                if len(exceptions) < 100:
+                    exceptions.append({"key": k, "f1_gross": float(amt1), "f2_gross": float(amt2), "diff": float(amt1 - amt2)})
 
         status = "PASSED" if failed == 0 and abs(diff) <= self.matcher.tolerance else "DISCREPANCY_FOUND"
         expl = f"Total IFMIS Bill Master: ₹{tot1:,.2f}, Total IFMIS Gross Expenditure: ₹{tot2:,.2f}. Gross Difference: ₹{diff:,.2f} across {len(all_keys)} vouchers."
@@ -122,8 +125,12 @@ class CrossFileValidator:
         tot5 = sum((r.get('net_amt') or Decimal('0.00')) for r in ds5.records)
         diff = tot5 - tot1
 
-        g1 = self.matcher.group_by_key(ds1.records)
-        g5 = self.matcher.group_by_key(ds5.records)
+        g1 = defaultdict(Decimal)
+        for r in ds1.records:
+            g1[self.matcher.build_key(r)] += (r.get('net_amt') or Decimal('0.00'))
+        g5 = defaultdict(Decimal)
+        for r in ds5.records:
+            g5[self.matcher.build_key(r)] += (r.get('net_amt') or Decimal('0.00'))
         all_keys = set(g1.keys()) | set(g5.keys())
 
         passed = 0
@@ -131,15 +138,14 @@ class CrossFileValidator:
         exceptions = []
 
         for k in all_keys:
-            r1 = g1.get(k, [])
-            r5 = g5.get(k, [])
-            amt1 = sum((r.get('net_amt') or Decimal('0.00')) for r in r1)
-            amt5 = sum((r.get('net_amt') or Decimal('0.00')) for r in r5)
+            amt1 = g1.get(k, Decimal('0.00'))
+            amt5 = g5.get(k, Decimal('0.00'))
             if abs(amt1 - amt5) <= self.matcher.tolerance:
                 passed += 1
             else:
                 failed += 1
-                exceptions.append({"key": k, "f1_net": float(amt1), "f5_net": float(amt5), "diff": float(amt5 - amt1)})
+                if len(exceptions) < 100:
+                    exceptions.append({"key": k, "f1_net": float(amt1), "f5_net": float(amt5), "diff": float(amt5 - amt1)})
 
         status = "PASSED" if failed == 0 and abs(diff) <= self.matcher.tolerance else "DISCREPANCY_FOUND"
         expl = f"Total Bill Master Net: ₹{tot1:,.2f}, Total Treasury Net SOP: ₹{tot5:,.2f}. Net Difference: ₹{diff:,.2f}."
@@ -200,15 +206,16 @@ class CrossFileValidator:
             else:
                 failed += 1
                 tot_diff += diff
-                exceptions.append({
-                    "row": r.source_row,
-                    "vou_no": r.get('vou_no'),
-                    "mhcd": r.get('mhcd'),
-                    "gross": float(g),
-                    "net": float(n),
-                    "ag_ded": float(ag),
-                    "diff": float(diff)
-                })
+                if len(exceptions) < 100:
+                    exceptions.append({
+                        "row": r.source_row,
+                        "vou_no": r.get('vou_no'),
+                        "mhcd": r.get('mhcd'),
+                        "gross": float(g),
+                        "net": float(n),
+                        "ag_ded": float(ag),
+                        "diff": float(diff)
+                    })
 
         status = "PASSED" if failed == 0 else "DISCREPANCY_FOUND"
         expl = f"Evaluated {len(ds1.records)} bills. Passed: {passed}, Failed: {failed}. Total arithmetic discrepancy: ₹{tot_diff:,.2f}."
@@ -361,8 +368,10 @@ class CrossFileValidator:
                                              "Verifies amount conservation during aggregation", status="NOT_PERFORMED", explanation="IFMIS Gross Expenditure not loaded.")
 
         tot_raw = sum((r.get('gross_amt') or Decimal('0.00')) for r in ds2.records)
-        grp = self.matcher.group_by_key(ds2.records)
-        tot_grouped = sum(sum((r.get('gross_amt') or Decimal('0.00')) for r in r_list) for r_list in grp.values())
+        grp = defaultdict(Decimal)
+        for r in ds2.records:
+            grp[self.matcher.build_key(r)] += (r.get('gross_amt') or Decimal('0.00'))
+        tot_grouped = sum(grp.values())
         diff = tot_raw - tot_grouped
 
         status = "PASSED" if abs(diff) <= self.matcher.tolerance else "FAILED"
