@@ -139,23 +139,28 @@ class DataNormalizer:
     def normalize_date(val_str):
         """
         Normalizes a date string into standard DD-MM-YYYY format across IFMIS (DD/MM/YYYY)
-        and VLC COMPAY (DD-MM-YYYY or YYYY-MM-DD).
+        and VLC COMPAY (DD-MM-YYYY or YYYY-MM-DD). Strips any time component.
         """
         if not val_str:
             return ""
         s = str(val_str).strip()
         if not s:
             return ""
+        # 1. Strip time if present (e.g. '2025-10-31 00:00:00', '2025-10-31T00:00:00', or '31 00:00:00-10-2025')
+        s = re.sub(r'\s+\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?', '', s)
+        s = s.split('T')[0].strip()
         # Standardize delimiters
         clean = re.sub(r'[/.\\]', '-', s)
         parts = clean.split('-')
         if len(parts) == 3:
-            p0, p1, p2 = parts[0].strip(), parts[1].strip(), parts[2].strip()
+            p0 = re.sub(r'\D', '', parts[0].strip())
+            p1 = re.sub(r'\D', '', parts[1].strip())
+            p2 = re.sub(r'\D', '', parts[2].strip())
             # Case: YYYY-MM-DD
-            if len(p0) == 4 and p0.isdigit():
+            if len(p0) == 4 and p0.isdigit() and len(p2) <= 2:
                 return f"{p2.zfill(2)}-{p1.zfill(2)}-{p0}"
             # Case: DD-MM-YYYY
-            elif len(p2) == 4 and p2.isdigit():
+            elif len(p2) == 4 and p2.isdigit() and len(p0) <= 2:
                 return f"{p0.zfill(2)}-{p1.zfill(2)}-{p2}"
         return clean
 

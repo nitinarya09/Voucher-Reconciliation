@@ -866,6 +866,35 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function formatDate(val) {
+  if (!val) return '-';
+  let s = String(val).trim();
+  if (!s || s === '-' || s === 'null' || s === 'undefined') return '-';
+
+  // 1. Strip time component e.g. " 00:00:00" or "T00:00:00"
+  s = s.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?/g, '');
+  s = s.split('T')[0].trim();
+
+  // 2. Standardize delimiters
+  const clean = s.replace(/[/.\\]/g, '-');
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const p0 = parts[0].trim().replace(/\D/g, '');
+    const p1 = parts[1].trim().replace(/\D/g, '');
+    const p2 = parts[2].trim().replace(/\D/g, '');
+
+    // Case: YYYY-MM-DD
+    if (p0.length === 4 && p2.length <= 2) {
+      return `${p2.padStart(2, '0')}-${p1.padStart(2, '0')}-${p0}`;
+    }
+    // Case: DD-MM-YYYY
+    if (p2.length === 4 && p0.length <= 2) {
+      return `${p0.padStart(2, '0')}-${p1.padStart(2, '0')}-${p2}`;
+    }
+  }
+  return clean || '-';
+}
+
 window.onImportProgress = function(data) {
   if (!data) return;
   const statusEl = document.getElementById('folder-import-status');
@@ -2035,7 +2064,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
         const rawTry = ((f6Idx.TRY_CD !== undefined ? row[f6Idx.TRY_CD] : '') || '').trim().toUpperCase();
         const tryCd = MP_TRY_SHORT_TO_CODE[rawTry] || rawTry || '052';
         const ddoCd = (f6Idx.DDO_CD !== undefined ? row[f6Idx.DDO_CD] : '') || '';
-        const billDate = (f6Idx.BILL_DATE !== undefined ? row[f6Idx.BILL_DATE] : '') || '';
+        const billDate = formatDate((f6Idx.BILL_DATE !== undefined ? row[f6Idx.BILL_DATE] : '') || '');
         const smcd = ((f6Idx.SMCD !== undefined ? row[f6Idx.SMCD] : '') || '').trim().replace(/\.0$/, '');
         const micd = ((f6Idx.MICD !== undefined ? row[f6Idx.MICD] : '') || '').trim().replace(/\.0$/, '');
         const shcd = ((f6Idx.SHCD !== undefined ? row[f6Idx.SHCD] : '') || '').trim().replace(/\.0$/, '');
@@ -2151,7 +2180,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const ddo_cd = row[6] || '';
       const mhcd = row[8] || '';
       const vou_no = row[9] || '';
-      const vou_date = row[10] || '';
+      const vou_date = formatDate(row[10] || '');
       const gross = parseFloat(row[11] || 0) || 0;
       const ag_ded = parseFloat(row[12] || 0) || 0;
       const try_ded = parseFloat(row[13] || 0) || 0;
@@ -2189,7 +2218,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       const m = row[3] ? String(parseInt(row[3], 10)) : '';
       const ddo_cd = row[4] || '';
       const token_no = row[5] || '';
-      const vou_date = row[6] || '';
+      const vou_date = formatDate(row[6] || '');
       const vou_no = row[7] || '';
       const net = parseFloat(row[9] || 0) || 0;
 
@@ -2219,7 +2248,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
       if (y.length === 2) y = '20' + y;
       const try_cd = row[2] || '052';
       const vou_no = row[4] || '';
-      const vou_date = row[5] || '';
+      const vou_date = formatDate(row[5] || '');
       const mhcd = row[6] || '';
       const smcd = row[7] || '';
       const micd = row[8] || '';
@@ -2418,7 +2447,7 @@ function parseAndReconcileUploadedFiles(keyConfig = {}, tolerance = 0.0) {
     const try_cd = try_cd_key || (f1 && f1.try_cd) || (f2 && f2.try_cd) || (f5 && f5.try_cd) || (cp && cp.try_cd) || '052';
     const ddo_cd = (f1 && f1.ddo_cd) || (cp && cp.ddo_cd) || (f5 && f5.ddo_cd) || '';
     const token_no = (f1 && f1.token_no) || (f5 && f5.token_no) || '';
-    const vou_date = (f1 && f1.vou_date) || (f2 && f2.vou_date) || (cp && cp.bill_date) || (f5 && f5.vou_date) || '';
+    const vou_date = formatDate((f1 && f1.vou_date) || (f2 && f2.vou_date) || (cp && cp.bill_date) || (f5 && f5.vou_date) || '');
 
     const cpGross = cp ? cp.gross : 0;
     const sopGross = f2 ? f2.gross : (f1 ? f1.gross : 0);
@@ -3794,7 +3823,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
           "Voucher No": v.vou_no || "",
           "DDO Code": v.ddo_cd || "",
           "Token No": v.token_no || "",
-          "Voucher Date": v.vou_date || "",
+          "Voucher Date": formatDate(v.vou_date),
           "File 2 Gross Exp (₹)": sg,
           "File 6 COMPAY Gross (₹)": cg,
           "Gross Diff (₹)": df,
@@ -3853,7 +3882,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       const rows = refundRows.map(rf => ({
         "Source File": rf.source_file,
         "Voucher No": rf.vou_no,
-        "Date": rf.vou_date || "",
+        "Date": formatDate(rf.vou_date),
         "DDO Code": rf.ddo_cd || "",
         "Classification Head": rf.head,
         "Major Head Description": rf.head_desc,
@@ -3874,7 +3903,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
         "Voucher No": v.vou_no,
         "DDO Code": v.ddo_cd || "",
         "Token": v.token_no || "",
-        "Date": v.vou_date || "",
+        "Date": formatDate(v.vou_date),
         "File 2 Gross (₹)": v.sop_gross || 0,
         "File 6 Gross (₹)": v.compay_gross || 0,
         "Difference (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
@@ -3992,7 +4021,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
           "Voucher No": v.vou_no,
           "DDO Code": v.ddo_cd || "",
           "Token No": v.token_no || "",
-          "Voucher Date": v.vou_date || "",
+          "Voucher Date": formatDate(v.vou_date),
           "File 2 Gross Exp (₹)": v.sop_gross || 0,
           "File 6 COMPAY Gross (₹)": v.compay_gross || 0,
           "Gross Diff (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
@@ -4019,7 +4048,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
         const wsRef = XLSX.utils.json_to_sheet(currentData.refund_register.rows.map(rf => ({
           "Source File": rf.source_file,
           "Voucher No": rf.vou_no,
-          "Date": rf.vou_date || "",
+          "Date": formatDate(rf.vou_date),
           "DDO Code": rf.ddo_cd || "",
           "Classification Head": rf.head,
           "Major Head Description": rf.head_desc,
@@ -4051,7 +4080,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
           "Voucher No": v.vou_no,
           "DDO Code": v.ddo_cd || "",
           "Token": v.token_no || "",
-          "Date": v.vou_date || "",
+          "Date": formatDate(v.vou_date),
           "File 2 Gross (₹)": v.sop_gross || 0,
           "File 6 Gross (₹)": v.compay_gross || 0,
           "Difference (₹)": (v.sop_gross || 0) - (v.compay_gross || 0),
@@ -4068,7 +4097,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
           "Voucher No": te.vou_no,
           "Section Code": te.sctnd_code,
           "Amount (₹)": te.amount,
-          "Bill Date": te.date
+          "Bill Date": formatDate(te.date)
         })));
         XLSX.utils.book_append_sheet(wb, wsTE, "Transfer_Entries_TE");
       }
@@ -4136,7 +4165,7 @@ function triggerClientExport(format, section = null, saveAs = false) {
       const diff = sg - cg;
       totSop += sg;
       totCp += cg;
-      csv += `"${v.try_cd}","${v.mhcd}","${v.vou_no}","${v.ddo_cd||''}","${v.token_no||''}","${v.vou_date||''}",${sg},${cg},${diff},"${v.status}","${(v.status_desc||'').replace(/"/g, '""')}"\n`;
+      csv += `"${v.try_cd}","${v.mhcd}","${v.vou_no}","${v.ddo_cd||''}","${v.token_no||''}","${formatDate(v.vou_date)}",${sg},${cg},${diff},"${v.status}","${(v.status_desc||'').replace(/"/g, '""')}"\n`;
     });
     if (isGrossRecon) {
       csv += `"TOTAL","Count: ${vouchersToExport.length}","","","","",${totSop},${totCp},${totSop - totCp},"${Math.abs(totSop - totCp) < 0.01 ? 'EXACT_PARITY' : 'NET_VARIANCE'}","Summary Total for ${vouchersToExport.length} active filtered vouchers"\n`;
@@ -5240,7 +5269,7 @@ function appendGrossTableChunk() {
       <td class="center-col"><strong>${v.vou_no}</strong></td>
       <td>${v.ddo_cd || '-'}</td>
       <td class="center-col">${v.token_no || '-'}</td>
-      <td class="center-col">${v.vou_date || '-'}</td>
+      <td class="center-col">${formatDate(v.vou_date)}</td>
       <td class="num-col">${formatCurrency(v.sop_gross)}</td>
       <td class="num-col">${formatCurrency(v.compay_gross)}</td>
       <td class="num-col" style="font-weight: 700; color: ${Math.abs(diff) < 0.01 ? 'var(--success)' : 'var(--danger)'};">${formatCurrency(diff)}</td>
@@ -5718,7 +5747,7 @@ function renderRefundTable() {
     tr.innerHTML = `
       <td><span class="badge ${r.source_file.includes('COMPAY') ? 'badge-success' : 'badge-info'}">${r.source_file}</span></td>
       <td class="center-col"><strong>${r.vou_no}</strong></td>
-      <td class="center-col">${r.vou_date || '-'}</td>
+      <td class="center-col">${formatDate(r.vou_date)}</td>
       <td>${r.ddo_cd || '-'}</td>
       <td class="center-col"><code style="font-size: 0.82rem;">${r.head}</code></td>
       <td><strong>${r.head_desc || ('Head ' + r.mhcd)}</strong></td>
@@ -6687,7 +6716,7 @@ function renderExceptionsMismatch() {
       <td class="center-col" style="color: var(--danger); font-weight: 700;">${v.vou_no}</td>
       <td>${v.ddo_cd || '-'}</td>
       <td class="center-col">${v.token_no || '-'}</td>
-      <td class="center-col">${v.vou_date || '-'}</td>
+      <td class="center-col">${formatDate(v.vou_date)}</td>
       <td class="num-col" style="font-weight: 700;">${formatCurrency(v.sop_gross)}</td>
       <td class="num-col" style="font-weight: 700;">${formatCurrency(v.compay_gross)}</td>
       <td class="num-col" style="font-weight: 700; color: var(--danger);">${formatCurrency(diff)}</td>
@@ -6816,7 +6845,7 @@ function renderExceptionsMissingCompay() {
         <td class="center-col" style="color: var(--warning); font-weight: 700;">${m.vou_no}</td>
         <td>${m.ddo_cd || '-'}</td>
         <td class="center-col">${m.token_no || '-'}</td>
-        <td class="center-col">${m.vou_date || '-'}</td>
+        <td class="center-col">${formatDate(m.vou_date)}</td>
         <td class="num-col" style="color: var(--text-main); font-weight: 700;">${formatCurrency(m.sop_gross)}</td>
         <td class="num-col">${formatCurrency(m.file1_net)}</td>
         <td class="center-col"><span class="badge badge-warning">${m.status}</span></td>
@@ -6937,7 +6966,7 @@ function renderExceptionsMissingSop() {
         <td class="center-col"><strong>${m.mhcd}</strong></td>
         <td class="center-col" style="color: var(--danger); font-weight: 700;">${m.vou_no}</td>
         <td>${m.ddo_cd || '-'}</td>
-        <td class="center-col">${m.vou_date || '-'}</td>
+        <td class="center-col">${formatDate(m.vou_date)}</td>
         <td class="num-col" style="color: var(--danger); font-weight: 700;">${formatCurrency(m.compay_gross)}</td>
         <td>${m.status_desc}</td>
       `;
@@ -7116,7 +7145,7 @@ function showVoucherRowExplanation(keyOrObj) {
       </div>
       <div>
         <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Voucher Date</div>
-        <div style="font-weight: 600; font-size: 0.85rem;">${v.vou_date || '-'}</div>
+        <div style="font-weight: 600; font-size: 0.85rem;">${formatDate(v.vou_date)}</div>
       </div>
       <div>
         <div style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Token / Bill No</div>
